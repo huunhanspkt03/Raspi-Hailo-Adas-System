@@ -1,0 +1,26 @@
+# YOLO26n-seg model script for Hailo-8.
+# Attention blocks are bypassed at export time (see scripts/export_yolo26_seg_noattn.py),
+# so the matmul1 issue is gone.  Remaining challenge is resource allocation:
+# the segmentation proto head plus dual detection heads (one2one + one2many) push
+# the model into 3 contexts where cluster_2 was timing out under level=max search.
+
+# Normalize uint8 RGB input to 0..1 inside the model graph.
+normalization1 = normalization([0.0, 0.0, 0.0], [255.0, 255.0, 255.0])
+
+# level=2 runs a focused mapping search instead of the exhaustive level=max,
+# which keeps allocation time bounded for this 3-context model.
+performance_param(compiler_optimization_level=2)
+
+# Give the resource allocator a longer hard cap (default ~10 min/context).
+allocator_param(timeout=10800)
+
+# Standard quantization with calibration data.  optimization_level=2 gives the
+# best SNR; drop to 1 if calibration set is small (<256).
+model_optimization_flavor(optimization_level=2)
+
+# Activation/weight clipping helps quantization for YOLO heads.
+pre_quantization_optimization(activation_clipping, layers={*}, mode=percentile, clipping_values=[0.01, 99.99])
+pre_quantization_optimization(weights_clipping, layers={*}, mode=percentile, clipping_values=[0.01, 99.99])
+
+# Disable finetune to avoid long quantization passes; re-enable if accuracy drops.
+post_quantization_optimization(finetune, policy=disabled)

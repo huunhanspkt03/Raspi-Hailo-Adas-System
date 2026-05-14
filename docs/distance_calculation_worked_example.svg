@@ -1,0 +1,190 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1700" height="1300" viewBox="0 0 1700 1300" role="img" aria-labelledby="title desc">
+  <title id="title">Worked example of ADAS distance calculations</title>
+  <desc id="desc">One diagram showing numeric parameter calculations for the project's monocular distance methods.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f4f7fb; }
+      .card { fill: #ffffff; stroke: #c9d3df; stroke-width: 2; rx: 8; }
+      .title { font: 700 34px Arial, sans-serif; fill: #15202b; }
+      .subtitle { font: 19px Arial, sans-serif; fill: #536273; }
+      .h2 { font: 700 24px Arial, sans-serif; fill: #15202b; }
+      .h3 { font: 700 19px Arial, sans-serif; fill: #1c2b38; }
+      .txt { font: 17px Arial, sans-serif; fill: #263443; }
+      .small { font: 14px Arial, sans-serif; fill: #536273; }
+      .formula { font: 700 18px Arial, sans-serif; fill: #0f5b99; }
+      .mono { font: 15px Consolas, monospace; fill: #684400; }
+      .result { font: 700 20px Arial, sans-serif; fill: #007a4d; }
+      .warntext { font: 700 17px Arial, sans-serif; fill: #a45100; }
+      .road { fill: #303840; }
+      .sky { fill: #dceaf8; }
+      .lane { fill: none; stroke: #ffd166; stroke-width: 5; }
+      .center { fill: none; stroke: #ef476f; stroke-width: 4; stroke-dasharray: 12 10; }
+      .box { fill: none; stroke: #06a77d; stroke-width: 4; }
+      .box2 { fill: none; stroke: #ef476f; stroke-width: 4; }
+      .box3 { fill: none; stroke: #118ab2; stroke-width: 3; }
+      .box4 { fill: none; stroke: #8e6cd8; stroke-width: 4; }
+      .arrow { stroke: #0f5b99; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .arrow2 { stroke: #566b7f; stroke-width: 3; fill: none; marker-end: url(#arrow2); }
+      .flow { stroke: #2f80ed; stroke-width: 4; fill: none; marker-end: url(#arrowBlue); }
+      .dash { stroke: #8e6cd8; stroke-width: 3; stroke-dasharray: 12 8; }
+      .measure { stroke: #15202b; stroke-width: 2; stroke-dasharray: 6 5; }
+      .ok { fill: #e9f8f1; stroke: #06a77d; stroke-width: 2; rx: 6; }
+      .note { fill: #edf5ff; stroke: #7aa7f7; stroke-width: 2; rx: 6; }
+      .warn { fill: #fff4df; stroke: #f4a261; stroke-width: 2; rx: 6; }
+      .darkLabel { font: 15px Arial, sans-serif; fill: #ffffff; }
+    </style>
+    <marker id="arrow" markerWidth="11" markerHeight="9" refX="10" refY="4.5" orient="auto">
+      <path d="M0,0 L11,4.5 L0,9 Z" fill="#0f5b99"/>
+    </marker>
+    <marker id="arrow2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#566b7f"/>
+    </marker>
+    <marker id="arrowBlue" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#2f80ed"/>
+    </marker>
+    <linearGradient id="roadGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#656f7b"/>
+      <stop offset="1" stop-color="#252b33"/>
+    </linearGradient>
+  </defs>
+
+  <rect class="bg" width="1700" height="1120"/>
+  <text x="48" y="58" class="title">Một hình minh họa kèm tính toán thông số khoảng cách</text>
+  <text x="48" y="90" class="subtitle">Ví dụ số bám theo default hiện tại: frame 1280x720, hfov=73°, camera_height=1.0m, pitch=5.0°.</text>
+
+  <!-- Shared parameters -->
+  <rect class="card" x="48" y="120" width="1604" height="100"/>
+  <text x="76" y="155" class="h2">Thông số camera dùng chung</text>
+  <text x="76" y="188" class="formula">fx = fy = (0.5 * W) / tan(hfov/2) = 640 / tan(36.5°) = 864.9 px</text>
+  <text x="720" y="188" class="formula">cx = (1280 - 1) / 2 = 639.5 px</text>
+  <text x="1110" y="188" class="formula">cy = (720 - 1) / 2 = 359.5 px</text>
+
+  <!-- Main camera scene -->
+  <rect class="card" x="48" y="250" width="690" height="620"/>
+  <text x="78" y="288" class="h2">Khung ảnh mẫu và bbox</text>
+  <rect x="92" y="320" width="600" height="405" class="sky" rx="6"/>
+  <polygon points="92,725 302,410 482,410 692,725" fill="url(#roadGrad)"/>
+  <line class="dash" x1="92" y1="432" x2="692" y2="432"/>
+  <text x="106" y="424" class="small">traffic-light horizon = 440.4 px</text>
+  <path class="lane" d="M275 725 C310 620, 338 500, 365 410"/>
+  <path class="lane" d="M508 725 C466 620, 438 500, 415 410"/>
+  <path class="center" d="M390 725 C390 610, 390 500, 390 410"/>
+
+  <!-- Scaled coordinate hints: sx about 0.469, sy about 0.5625, origin 92,320 -->
+  <!-- Normal car bbox: [560,360,720,540] -->
+  <rect class="box" x="354.5" y="522.5" width="75" height="101.25"/>
+  <rect x="369" y="559" width="46" height="35" fill="#64b5f6" stroke="#15344d" stroke-width="2"/>
+  <circle cx="378" cy="604" r="6" fill="#15202b"/>
+  <circle cx="407" cy="604" r="6" fill="#15202b"/>
+  <line class="measure" x1="438" y1="522.5" x2="438" y2="623.75"/>
+  <text x="448" y="575" class="small">h=180 px</text>
+  <circle cx="392" cy="624" r="5" fill="#06a77d"/>
+  <text x="450" y="520" class="small">car bbox [560,360,720,540]</text>
+
+  <!-- Oblique/off-axis car bbox: [800,390,1030,555] -->
+  <rect class="box4" x="467" y="539.4" width="107.8" height="92.8"/>
+  <polygon points="500,585 548,562 560,601 508,626" fill="#9b5de5" opacity="0.72" stroke="#2b1f4c" stroke-width="2"/>
+  <circle cx="518" cy="622" r="6" fill="#15202b"/>
+  <circle cx="554" cy="604" r="6" fill="#15202b"/>
+  <circle cx="467" cy="632.2" r="5" fill="#8e6cd8"/>
+  <line class="arrow2" x1="392" y1="725" x2="467" y2="632.2"/>
+  <text x="500" y="535" class="small">xe chéo [800,390,1030,555]</text>
+  <text x="477" y="650" class="small">foot_u=x1</text>
+
+  <!-- Bottom cap car bbox: [500,618,780,718] -->
+  <rect class="box2" x="326.4" y="667.6" width="131.3" height="56.25"/>
+  <rect x="354" y="690" width="78" height="24" fill="#ffb703" stroke="#4a2c00" stroke-width="2"/>
+  <circle cx="371" cy="718" r="6" fill="#15202b"/>
+  <circle cx="414" cy="718" r="6" fill="#15202b"/>
+  <line x1="92" y1="725" x2="692" y2="725" stroke="#ef476f" stroke-width="4"/>
+  <text x="462" y="692" class="small">partial bbox chạm đáy</text>
+
+  <!-- Traffic light bbox: [900,170,930,220] -->
+  <rect class="box3" x="514" y="415.6" width="14.1" height="28.1"/>
+  <circle cx="521" cy="425" r="5" fill="#ef476f"/>
+  <circle cx="521" cy="437" r="5" fill="#06a77d"/>
+  <line class="arrow" x1="392" y1="725" x2="521" y2="430"/>
+  <path d="M417 666 A70 70 0 0 1 449 610" fill="none" stroke="#0f5b99" stroke-width="3"/>
+  <text x="456" y="615" class="small">theta</text>
+
+  <!-- Corridor and flow -->
+  <polygon points="365,410 415,410 564,725 220,725" fill="#ffd166" opacity="0.16" stroke="#ffd166" stroke-width="3"/>
+  <text x="118" y="754" class="small">vùng vàng: fixed/render corridor dùng cho in_path</text>
+  <path class="flow" d="M285 600 L285 635"/>
+  <path class="flow" d="M325 580 L325 620"/>
+  <path class="flow" d="M480 600 L480 638"/>
+  <text x="118" y="782" class="small">mũi tên xanh: dy optical flow trên lane_area</text>
+
+  <rect class="note" x="92" y="805" width="600" height="45"/>
+  <text x="112" y="833" class="txt">Trong ảnh này có 3 bbox: xe bình thường, xe bị cắt đáy, và đèn giao thông.</text>
+
+  <!-- Calculations left-middle -->
+  <rect class="card" x="765" y="250" width="420" height="300"/>
+  <text x="795" y="287" class="h2">A. Xe thường: size depth</text>
+  <text x="795" y="325" class="txt">Input: car, H_real=1.5m</text>
+  <text x="795" y="353" class="txt">bbox_h = 540 - 360 = 180 px</text>
+  <text x="795" y="386" class="formula">z = H_real * fy / bbox_h</text>
+  <text x="795" y="416" class="mono">z = 1.5 * 864.9 / 180 = 7.21 m</text>
+  <text x="795" y="449" class="mono">bottom_ratio = 540 / 720 = 0.75</text>
+  <text x="795" y="477" class="mono">0.75 &lt; 0.78 → không dùng bottom_cap</text>
+  <text x="795" y="510" class="result">Kết quả: z_m = distance_m = 7.21 m</text>
+
+  <rect class="card" x="765" y="570" width="420" height="300"/>
+  <text x="795" y="607" class="h2">B. Xe chạm đáy: bottom cap</text>
+  <text x="795" y="645" class="txt">Input: car partial bbox</text>
+  <text x="795" y="673" class="txt">bbox_h = 718 - 618 = 100 px</text>
+  <text x="795" y="706" class="mono">z_size = 1.5 * 864.9 / 100 = 12.97 m</text>
+  <text x="795" y="737" class="mono">bottom_ratio = 718 / 720 = 0.997</text>
+  <text x="795" y="768" class="mono">t = clamp((0.997 - 0.78) / 0.17) = 1.0</text>
+  <text x="795" y="799" class="mono">bottom_cap = 8*(1-t) + 0.6*t = 0.60 m</text>
+  <text x="795" y="832" class="result">Kết quả: z = min(12.97, 0.60) = 0.60 m</text>
+
+  <!-- Calculations right -->
+  <rect class="card" x="1215" y="250" width="437" height="300"/>
+  <text x="1245" y="287" class="h2">C. Đèn giao thông</text>
+  <text x="1245" y="325" class="txt">bbox=[900,170,930,220], h=50px</text>
+  <text x="1245" y="353" class="txt">center=(915,195), H_mount=5.5m</text>
+  <text x="1245" y="386" class="mono">horizon_y = cy + fy*tan(5°) = 435.2 px</text>
+  <text x="1245" y="417" class="mono">theta = atan((cy-v)/fy) + pitch = 15.77°</text>
+  <text x="1245" y="448" class="mono">z_size = 0.6 * 864.9 / 50 = 10.38 m</text>
+  <text x="1245" y="479" class="mono">z_height = (5.5-1.0)/tan(15.77°) = 15.94 m</text>
+  <text x="1245" y="512" class="result">Code hiện display distance_m = 15.94 m nếu ground anchor hợp lệ</text>
+
+  <rect class="card" x="1215" y="570" width="437" height="300"/>
+  <text x="1245" y="607" class="h2">D. x_m, in_path, ego speed</text>
+  <text x="1245" y="645" class="h3">Tọa độ ngang của đèn</text>
+  <text x="1245" y="674" class="mono">x_m = (915 - 639.5) / 864.9 * 15.94 = 5.08 m</text>
+  <text x="1245" y="705" class="mono">bearing = atan2(5.08, 15.94) = 17.7°</text>
+  <text x="1245" y="740" class="h3">In-path gate</text>
+  <text x="1245" y="768" class="mono">center_gate = 0.18 * 1280 = 230.4 px</text>
+  <text x="1245" y="796" class="mono">center band = [409.1, 869.9] px</text>
+  <text x="1245" y="830" class="h3">Ego speed prototype</text>
+  <text x="1245" y="858" class="mono">speed = |3.2 px/frame| * 30 / 160 = 0.60 m/s = 2.16 km/h</text>
+
+  <!-- Oblique car worked example -->
+  <rect class="card" x="48" y="900" width="1604" height="155"/>
+  <text x="76" y="937" class="h2">E. Xe nằm chéo / lệch phải: cách code hiện tại tính</text>
+  <text x="76" y="973" class="txt">bbox=[800,390,1030,555] → bbox_w=230px, bbox_h=165px, toàn bộ bbox nằm bên phải cx=639.5px.</text>
+  <text x="76" y="1005" class="mono">select_foot_u(): vì x1 &gt; cx nên foot_u = x1 = 800px, source=bottom_left_corner</text>
+  <text x="720" y="1005" class="mono">z_height = 1.5 * 864.9 / 165 = 7.86m</text>
+  <text x="720" y="1036" class="mono">x_m = (800 - 639.5) / 864.9 * 7.86 = 1.46m</text>
+  <text x="1190" y="1005" class="result">distance_m = hypot(1.46, 7.86) = 8.00m</text>
+  <text x="1190" y="1036" class="warntext">Tham khảo chưa fuse: z_width = 1.8 * 864.9 / 230 = 6.77m</text>
+
+  <!-- Bottom interpretation -->
+  <rect class="card" x="48" y="1085" width="1604" height="165"/>
+  <text x="76" y="1122" class="h2">Cách đọc kết quả trong dự án</text>
+  <rect class="ok" x="78" y="1143" width="360" height="80"/>
+  <text x="98" y="1171" class="h3">distance_source</text>
+  <text x="98" y="1199" class="txt">Cho biết kết quả đến từ size_height, bottom_cap, traffic_light_size, height, group...</text>
+
+  <rect class="warn" x="470" y="1143" width="520" height="80"/>
+  <text x="490" y="1171" class="h3">Điểm cần chú ý</text>
+  <text x="490" y="1199" class="txt">Xe dùng distance_m=hypot(x,z), còn traffic light hiện thường hiển thị distance_m=z.</text>
+
+  <rect class="note" x="1022" y="1143" width="585" height="80"/>
+  <text x="1042" y="1171" class="h3">Pixel-space diagnostics</text>
+  <text x="1042" y="1199" class="txt">lane_width_px, edge_distance_px, memory_error_px là pixel, không phải mét.</text>
+
+  <text x="76" y="1272" class="small">File tham chiếu chính: src/features/object_localizer.py, object_localizer_depth.py, object_localizer_pose.py, object_localizer_traffic.py, ego_speed_estimator.py</text>
+</svg>

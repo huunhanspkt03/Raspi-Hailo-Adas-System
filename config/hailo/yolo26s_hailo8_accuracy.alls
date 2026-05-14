@@ -1,0 +1,33 @@
+# YOLO26s -> Hailo-8 accuracy-oriented host profile for 32GB+ RAM machines.
+# Keeps the raw 6-tensor one2one heads and favors quantization quality over
+# low-memory survival. Suitable for export/compile flow in this repo.
+
+normalization1 = normalization([0.0, 0.0, 0.0], [255.0, 255.0, 255.0])
+
+performance_param(compiler_optimization_level=max)
+
+# Use the stronger global optimization search on hosts with enough RAM.
+model_optimization_flavor(optimization_level=2)
+
+# Consume up to 1024 representative RGB uint8 letterboxed samples.
+model_optimization_config(calibration, batch_size=1, calibset_size=1024)
+
+# Clip extreme activation/weight tails before quantization.
+pre_quantization_optimization(activation_clipping, layers={*}, mode=percentile, clipping_values=[0.01, 99.99])
+pre_quantization_optimization(weights_clipping, layers={*}, mode=percentile, clipping_values=[0.01, 99.99])
+
+# Keep finetune disabled by default for portability. Re-enable only on a host
+# with enough RAM/GPU budget and a representative calibration set.
+# post_quantization_optimization(finetune, policy=enabled, learning_rate=0.000025, epochs=4, batch_size=2)
+post_quantization_optimization(finetune, policy=disabled)
+
+# Allocator hint from Hailo Model Zoo yolov8* reference.
+allocator_param(width_splitter_defuse=disabled)
+
+# --- OPTIONAL: absorb sigmoid of cls heads into the HEF ---------------------
+# Procedure: parse HAR -> `hailo har info` -> find conv names of the 3
+# one2one_cv3.{0,1,2}.2 end nodes -> uncomment below with real names.
+# Runtime: export YOLO26_HAILO_SIGMOID_ABSORBED=1
+# change_output_activation(<cls_conv_stride8>, sigmoid)
+# change_output_activation(<cls_conv_stride16>, sigmoid)
+# change_output_activation(<cls_conv_stride32>, sigmoid)

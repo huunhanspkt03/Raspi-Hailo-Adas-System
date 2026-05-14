@@ -1,0 +1,129 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1760" height="1210" viewBox="0 0 1760 1210" role="img" aria-labelledby="title desc">
+  <title id="title">Distance simulation on outputs/bench_frame_100.png</title>
+  <desc id="desc">A real output frame with an approximate motorcycle bbox and the numeric monocular distance calculation used by ObjectLocalizer.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f5f7fb; }
+      .panel { fill: #ffffff; stroke: #c7d2df; stroke-width: 2; rx: 8; }
+      .title { font: 700 30px Arial, sans-serif; fill: #142230; }
+      .sub { font: 17px Arial, sans-serif; fill: #526273; }
+      .h2 { font: 700 23px Arial, sans-serif; fill: #142230; }
+      .h3 { font: 700 18px Arial, sans-serif; fill: #1c2b38; }
+      .txt { font: 17px Arial, sans-serif; fill: #263443; }
+      .small { font: 14px Arial, sans-serif; fill: #536273; }
+      .mono { font: 15px Consolas, monospace; fill: #674500; }
+      .formula { font: 700 18px Arial, sans-serif; fill: #075a9a; }
+      .result { font: 700 22px Arial, sans-serif; fill: #00875f; }
+      .warn { font: 700 17px Arial, sans-serif; fill: #aa5200; }
+      .bbox { fill: rgba(142,108,216,0.08); stroke: #8e6cd8; stroke-width: 4; }
+      .bbox2 { fill: none; stroke: #06a77d; stroke-width: 3; stroke-dasharray: 8 6; }
+      .axis { stroke: #ef476f; stroke-width: 3; stroke-dasharray: 12 8; }
+      .gate { fill: #4dabf7; opacity: 0.12; }
+      .foot { fill: #8e6cd8; stroke: #ffffff; stroke-width: 3; }
+      .call { fill: #fff6df; stroke: #f4a261; stroke-width: 2; rx: 6; }
+      .note { fill: #eaf6f0; stroke: #06a77d; stroke-width: 2; rx: 6; }
+      .arrow { stroke: #075a9a; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .arrow2 { stroke: #606f7f; stroke-width: 3; fill: none; marker-end: url(#arrow2); }
+    </style>
+    <marker id="arrow" markerWidth="11" markerHeight="9" refX="10" refY="4.5" orient="auto">
+      <path d="M0,0 L11,4.5 L0,9 Z" fill="#075a9a"/>
+    </marker>
+    <marker id="arrow2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#606f7f"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1760" height="980"/>
+  <text x="40" y="52" class="title">Mô phỏng tính khoảng cách trên ảnh thật trong outputs</text>
+  <text x="40" y="82" class="sub">Ảnh nguồn: outputs/bench_frame_100.png. Bbox dưới đây được chọn thủ công quanh xe máy trong ảnh để minh họa cách code đang tính.</text>
+
+  <rect class="panel" x="30" y="105" width="1300" height="745"/>
+  <image href="../outputs/bench_frame_100.png" x="40" y="115" width="1280" height="720" preserveAspectRatio="xMidYMid meet"/>
+
+  <!-- Center gate and camera center axis, using real frame coordinates offset by x=40,y=115. -->
+  <rect class="gate" x="449.1" y="115" width="460.8" height="720"/>
+  <line class="axis" x1="679.5" y1="115" x2="679.5" y2="835"/>
+  <text x="690" y="142" class="small">cx = 639.5 px</text>
+  <text x="470" y="825" class="small">center gate = [409.1, 869.9] px</text>
+
+  <!-- Approximate motorcycle bbox in original image: [655,374,711,489]. Add image offset. -->
+  <rect class="bbox" x="695" y="489" width="56" height="115"/>
+  <circle class="foot" cx="695" cy="604" r="7"/>
+  <text x="757" y="505" class="small">bbox xe máy</text>
+  <text x="757" y="526" class="small">[655,374,711,489]</text>
+  <line class="arrow2" x1="695" y1="604" x2="679.5" y2="604"/>
+  <text x="610" y="596" class="small">foot_u=x1</text>
+
+  <!-- Optional reference car bbox to show that this simulation focuses on one object. -->
+  <rect class="bbox2" x="482" y="501" width="89" height="66"/>
+  <text x="406" y="495" class="small">xe trắng khác trong frame</text>
+
+  <rect class="call" x="780" y="620" width="420" height="90"/>
+  <text x="800" y="650" class="h3">Vì bbox nằm bên phải trục camera</text>
+  <text x="800" y="678" class="txt">select_foot_u chọn cạnh trái x1=655px,</text>
+  <text x="800" y="702" class="txt">tức điểm gần trục camera nhất ở đáy bbox.</text>
+  <path class="arrow" d="M780 665 C740 640, 720 620, 700 607"/>
+
+  <!-- Calculation panel -->
+  <rect class="panel" x="1350" y="105" width="370" height="745"/>
+  <text x="1378" y="146" class="h2">Tính cho xe máy trong ảnh</text>
+
+  <text x="1378" y="190" class="h3">1. Input từ frame</text>
+  <text x="1378" y="220" class="mono">frame = 1280 x 720</text>
+  <text x="1378" y="248" class="mono">bbox = [655,374,711,489]</text>
+  <text x="1378" y="276" class="mono">bbox_w = 711 - 655 = 56 px</text>
+  <text x="1378" y="304" class="mono">bbox_h = 489 - 374 = 115 px</text>
+
+  <text x="1378" y="350" class="h3">2. Intrinsics mặc định</text>
+  <text x="1378" y="380" class="mono">hfov = 73.0 deg</text>
+  <text x="1378" y="408" class="mono">fx = fy = 864.9 px</text>
+  <text x="1378" y="436" class="mono">cx = 639.5 px</text>
+
+  <text x="1378" y="482" class="h3">3. Depth theo chiều cao bbox</text>
+  <text x="1378" y="512" class="formula">z = H_real * fy / bbox_h</text>
+  <text x="1378" y="540" class="mono">motorcycle H_real = 1.0 m</text>
+  <text x="1378" y="568" class="mono">z = 1.0 * 864.9 / 115</text>
+  <text x="1378" y="596" class="result">z_m = 7.52 m</text>
+
+  <text x="1378" y="642" class="h3">4. Ngang và khoảng cách</text>
+  <text x="1378" y="672" class="mono">x1 &gt; cx → foot_u = x1 = 655</text>
+  <text x="1378" y="700" class="mono">x_m = (655 - 639.5) / 864.9 * 7.52</text>
+  <text x="1378" y="728" class="result">x_m = +0.13 m</text>
+  <text x="1378" y="762" class="result">distance_m = hypot(0.13, 7.52) = 7.52 m</text>
+  <text x="1378" y="800" class="warn">Tham khảo chưa dùng: z_width = 0.8*864.9/56 = 12.36 m</text>
+
+  <rect class="note" x="40" y="875" width="1280" height="70"/>
+  <text x="65" y="905" class="h3">Kết luận trên ảnh này</text>
+  <text x="65" y="932" class="txt">Với bbox thủ công quanh xe máy, thuật toán hiện tại sẽ ước lượng xe máy cách camera khoảng 8.04m. Vì xe nghiêng/lệch, bbox_w chỉ nên xem như tham khảo, còn code chính dùng bbox_h.</text>
+
+  <text x="1355" y="900" class="small">File logic: src/features/object_localizer_depth.py, object_localizer_pose.py</text>
+
+  <!-- Intrinsics worked visual -->
+  <rect class="panel" x="40" y="970" width="1680" height="195"/>
+  <text x="70" y="1010" class="h2">Hình tính các thông số intrinsics mặc định</text>
+
+  <rect x="80" y="1035" width="360" height="95" fill="#eef5ff" stroke="#7aa7f7" stroke-width="2" rx="6"/>
+  <line x1="120" y1="1110" x2="400" y2="1110" stroke="#142230" stroke-width="3"/>
+  <line x1="260" y1="1110" x2="400" y2="1048" stroke="#075a9a" stroke-width="4"/>
+  <line x1="260" y1="1110" x2="400" y2="1172" stroke="#075a9a" stroke-width="4"/>
+  <line x1="400" y1="1048" x2="400" y2="1172" stroke="#ef476f" stroke-width="4"/>
+  <path d="M292 1110 A36 36 0 0 1 326 1095" fill="none" stroke="#f4a261" stroke-width="3"/>
+  <text x="300" y="1092" class="small">36.5°</text>
+  <text x="178" y="1098" class="small">fx</text>
+  <text x="410" y="1093" class="small">W/2 = 640 px</text>
+  <text x="92" y="1058" class="small">hfov = 73° → hfov/2 = 36.5°</text>
+
+  <text x="480" y="1058" class="formula">tan(hfov/2) = (W/2) / fx</text>
+  <text x="480" y="1092" class="formula">fx = (W/2) / tan(hfov/2)</text>
+  <text x="480" y="1126" class="mono">fx = 640 / tan(36.5°) = 864.910... px ≈ 864.9 px</text>
+
+  <rect x="1030" y="1035" width="310" height="95" fill="#f0fff7" stroke="#06a77d" stroke-width="2" rx="6"/>
+  <line x1="1070" y1="1095" x2="1300" y2="1095" stroke="#142230" stroke-width="4"/>
+  <line x1="1185" y1="1050" x2="1185" y2="1128" stroke="#06a77d" stroke-width="4"/>
+  <text x="1064" y="1120" class="small">x=0</text>
+  <text x="1280" y="1120" class="small">x=1279</text>
+  <text x="1150" y="1047" class="small">cx</text>
+  <text x="1365" y="1066" class="formula">cx = (W - 1) / 2</text>
+  <text x="1365" y="1100" class="mono">cx = (1280 - 1) / 2 = 639.5 px</text>
+  <text x="1365" y="1132" class="mono">vfov chưa cấu hình → fy = fx = 864.9 px</text>
+</svg>

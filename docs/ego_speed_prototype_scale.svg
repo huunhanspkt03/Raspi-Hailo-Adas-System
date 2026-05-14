@@ -1,0 +1,62 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="620" viewBox="0 0 980 620">
+  <rect width="980" height="620" fill="#f7f7f4"/>
+
+  <text x="490" y="48" text-anchor="middle" font-family="Arial, sans-serif"
+        font-size="28" font-weight="700" fill="#202020">
+    Ego Speed Prototype Scale
+  </text>
+  <text x="490" y="82" text-anchor="middle" font-family="Arial, sans-serif"
+        font-size="16" fill="#555">
+    Current code uses BEV_PX_PER_METER = 80.0, borrowed as an approximate image-space scale
+  </text>
+
+  <rect x="80" y="125" width="820" height="340" fill="#ffffff" stroke="#c8c8c8" stroke-width="2"/>
+
+  <text x="120" y="165" font-family="Arial, sans-serif" font-size="18" font-weight="700" fill="#333">
+    Prototype conversion used by ego_speed_estimator.py
+  </text>
+
+  <line x1="150" y1="245" x2="790" y2="245" stroke="#999" stroke-width="2"/>
+  <line x1="150" y1="225" x2="150" y2="265" stroke="#333" stroke-width="3"/>
+  <line x1="790" y1="225" x2="790" y2="265" stroke="#333" stroke-width="3"/>
+
+  <rect x="150" y="220" width="80" height="50" fill="#e8f2ff" stroke="#2f6fb0" stroke-width="2"/>
+  <text x="190" y="252" text-anchor="middle" font-family="Arial, sans-serif"
+        font-size="16" font-weight="700" fill="#17466f">80 px</text>
+
+  <text x="470" y="237" text-anchor="middle" font-family="Arial, sans-serif"
+        font-size="22" font-weight="700" fill="#222">
+    =
+  </text>
+
+  <rect x="710" y="220" width="80" height="50" fill="#e9f7e8" stroke="#3b8c3b" stroke-width="2"/>
+  <text x="750" y="252" text-anchor="middle" font-family="Arial, sans-serif"
+        font-size="16" font-weight="700" fill="#246224">1 meter</text>
+
+  <text x="120" y="320" font-family="Arial, sans-serif" font-size="17" fill="#333">
+    Therefore:
+  </text>
+  <text x="160" y="355" font-family="Consolas, monospace" font-size="18" fill="#111">
+    1 px = 1 / 80 m = 0.0125 m = 1.25 cm
+  </text>
+  <text x="160" y="388" font-family="Consolas, monospace" font-size="18" fill="#111">
+    speed_kmh = abs(dy_px) * fps * 3.6 / 80
+  </text>
+
+  <rect x="120" y="500" width="740" height="70" fill="#fff7d8" stroke="#c9a227" stroke-width="2"/>
+  <text x="145" y="528" font-family="Arial, sans-serif" font-size="16" font-weight="700" fill="#5c4700">
+    Important limitation
+  </text>
+  <text x="145" y="555" font-family="Arial, sans-serif" font-size="15" fill="#5c4700">
+    This is not a calibrated real camera-image scale. In a perspective image, meters per pixel changes with y.
+  </text>
+
+  <g transform="translate(505 140)">
+    <polygon points="0,260 120,260 62,55 38,55" fill="#efefef" stroke="#777" stroke-width="2"/>
+    <line x1="16" y1="210" x2="104" y2="210" stroke="#d33" stroke-width="4"/>
+    <line x1="30" y1="155" x2="90" y2="155" stroke="#d33" stroke-width="4"/>
+    <line x1="41" y1="105" x2="79" y2="105" stroke="#d33" stroke-width="4"/>
+    <text x="155" y="215" font-family="Arial, sans-serif" font-size="14" fill="#333">near road: many px per meter</text>
+    <text x="155" y="110" font-family="Arial, sans-serif" font-size="14" fill="#333">far road: fewer px per meter</text>
+  </g>
+</svg>

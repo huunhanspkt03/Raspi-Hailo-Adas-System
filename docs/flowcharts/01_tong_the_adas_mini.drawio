@@ -1,0 +1,147 @@
+<mxfile host="Electron" agent="Codex">
+  <diagram id="p01-system" name="01 - Tổng thể ADAS mini">
+    <mxGraphModel dx="2020" dy="1201" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1880" pageHeight="1080" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="p01-system-title" parent="1" style="text;html=1;strokeColor=none;fillColor=none;fontSize=28;fontStyle=1;fontColor=#000000;align=center;verticalAlign=middle;" value="1. Tổng thể ADAS mini: các luồng chính và dữ liệu ra/vào" vertex="1">
+          <mxGeometry height="50" width="1120" x="380" y="25" as="geometry" />
+        </mxCell>
+        <mxCell id="s-start" parent="1" style="shape=mxgraph.flowchart.terminator;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=15;fontStyle=1;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Khởi động hệ thống" vertex="1">
+          <mxGeometry height="55" width="260" x="700" y="90" as="geometry" />
+        </mxCell>
+        <mxCell id="s-config" parent="1" style="shape=mxgraph.flowchart.data;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Đọc cấu hình chạy" vertex="1">
+          <mxGeometry height="80" width="250" x="70" y="210" as="geometry" />
+        </mxCell>
+        <mxCell id="s-source" parent="1" style="shape=mxgraph.flowchart.predefined_process;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Mở nguồn ảnh" vertex="1">
+          <mxGeometry height="80" width="250" x="70" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="s-backend" parent="1" style="shape=mxgraph.flowchart.predefined_process;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Chuẩn bị bộ suy luận" vertex="1">
+          <mxGeometry height="80" width="250" x="70" y="470" as="geometry" />
+        </mxCell>
+        <mxCell id="s-capture" parent="1" style="shape=mxgraph.flowchart.predefined_process;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Luồng capture&lt;br&gt;lấy frame mới" vertex="1">
+          <mxGeometry height="90" width="250" x="400" y="340" as="geometry" />
+        </mxCell>
+        <mxCell id="s-fanout" parent="1" style="shape=mxgraph.flowchart.data;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Sao chép frame&lt;br&gt;cho các nhánh xử lý" vertex="1">
+          <mxGeometry height="95" width="250" x="400" y="500" as="geometry" />
+        </mxCell>
+        <mxCell id="s-lq" parent="1" style="shape=mxgraph.flowchart.data;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Hàng đợi lane&lt;br&gt;frame mới nhất" vertex="1">
+          <mxGeometry height="85" width="240" x="730" y="250" as="geometry" />
+        </mxCell>
+        <mxCell id="s-oq" parent="1" style="shape=mxgraph.flowchart.data;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Hàng đợi object&lt;br&gt;frame mới nhất" vertex="1">
+          <mxGeometry height="85" width="240" x="730" y="580" as="geometry" />
+        </mxCell>
+        <mxCell id="s-lane" parent="1" style="shape=mxgraph.flowchart.predefined_process;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Luồng lane&lt;br&gt;nhận diện làn đường" vertex="1">
+          <mxGeometry height="105" width="250" x="1040" y="240" as="geometry" />
+        </mxCell>
+        <mxCell id="s-object" parent="1" style="shape=mxgraph.flowchart.predefined_process;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Luồng object&lt;br&gt;nhận diện vật thể" vertex="1">
+          <mxGeometry height="105" width="250" x="1040" y="570" as="geometry" />
+        </mxCell>
+        <mxCell id="s-lane-out" parent="1" style="shape=mxgraph.flowchart.data;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Kết quả lane" vertex="1">
+          <mxGeometry height="80" width="230" x="1360" y="260" as="geometry" />
+        </mxCell>
+        <mxCell id="s-object-out" parent="1" style="shape=mxgraph.flowchart.data;whiteSpace=wrap;html=1;fillColor=#DAE8FC;strokeColor=#6C8EBF;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Kết quả object" vertex="1">
+          <mxGeometry height="80" width="230" x="1410" y="585" as="geometry" />
+        </mxCell>
+        <mxCell id="s-fusion" parent="1" style="shape=mxgraph.flowchart.predefined_process;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Luồng fusion&lt;br&gt;ghép kết quả cùng frame" vertex="1">
+          <mxGeometry height="105" width="230" x="1660" y="400" as="geometry" />
+        </mxCell>
+        <mxCell id="s-behavior" parent="1" style="shape=mxgraph.flowchart.process;whiteSpace=wrap;html=1;fillColor=#FFF2CC;strokeColor=#D6B656;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Quyết định điều khiển" vertex="1">
+          <mxGeometry height="85" width="230" x="1660" y="770" as="geometry" />
+        </mxCell>
+        <mxCell id="s-output" parent="1" style="shape=mxgraph.flowchart.predefined_process;whiteSpace=wrap;html=1;fillColor=#E1D5E7;strokeColor=#9673A6;fontSize=15;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Luồng output&lt;br&gt;an toàn, hiển thị, RC" vertex="1">
+          <mxGeometry height="105" width="250" x="1040" y="760" as="geometry" />
+        </mxCell>
+        <mxCell id="s-stop" parent="1" style="shape=mxgraph.flowchart.terminator;whiteSpace=wrap;html=1;fillColor=#D5E8D4;strokeColor=#82B366;fontSize=15;fontStyle=1;fontColor=#000000;align=center;verticalAlign=middle;spacing=10;strokeWidth=1.5;" value="Dừng hệ thống&lt;br&gt;đóng tài nguyên" vertex="1">
+          <mxGeometry height="85" width="260" x="690" y="770" as="geometry" />
+        </mxCell>
+        <mxCell id="s-e1" edge="1" parent="1" source="s-start" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-config" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="830" y="165" />
+              <mxPoint x="195" y="165" />
+              <mxPoint x="195" y="210" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s-e2" edge="1" parent="1" source="s-config" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-source" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s-e3" edge="1" parent="1" source="s-source" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-backend" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s-e4" edge="1" parent="1" source="s-backend" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-capture" value="sẵn sàng">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="320" y="510" />
+              <mxPoint x="360" y="510" />
+              <mxPoint x="360" y="385" />
+              <mxPoint x="400" y="385" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s-e5" edge="1" parent="1" source="s-capture" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-fanout" value="frame">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s-e6" edge="1" parent="1" source="s-fanout" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-lq" value="vào lane">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="650" y="545" />
+              <mxPoint x="690" y="545" />
+              <mxPoint x="690" y="305" />
+              <mxPoint x="730" y="305" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s-e7" edge="1" parent="1" source="s-fanout" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-oq" value="vào object">
+          <mxGeometry relative="1" as="geometry">
+            <mxPoint as="offset" />
+            <Array as="points">
+              <mxPoint x="650" y="545" />
+              <mxPoint x="690" y="545" />
+              <mxPoint x="690" y="625" />
+              <mxPoint x="730" y="625" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s-e8" edge="1" parent="1" source="s-lq" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-lane" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s-e9" edge="1" parent="1" source="s-oq" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-object" value="">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s-e10" edge="1" parent="1" source="s-lane" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-lane-out" value="ra lane">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s-e11" edge="1" parent="1" source="s-object" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-object-out" value="ra object">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s-e12" edge="1" parent="1" source="s-lane-out" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-fusion" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1475" y="340" />
+              <mxPoint x="1475" y="410" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s-e13" edge="1" parent="1" source="s-object-out" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-fusion" value="">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="1475" y="580" />
+              <mxPoint x="1475" y="515" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="s-e14" edge="1" parent="1" source="s-fusion" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-behavior" value="quyết định">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s-e15" edge="1" parent="1" source="s-behavior" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-output" value="lệnh an toàn">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="s-e16" edge="1" parent="1" source="s-output" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;endArrow=block;strokeWidth=2;strokeColor=#4D4D4D;fontSize=13;fontColor=#000000;labelBackgroundColor=#FFFFFF;" target="s-stop" value="khi dừng">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

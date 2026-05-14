@@ -1,0 +1,100 @@
+# Python caches / tooling
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local environments and secrets
+.venv/
+venv/
+.env
+.env.*
+!.env.example
+!.env.sample
+*.pem
+*.key
+*.p12
+*.pfx
+
+# Local config overrides
+config/*_custom.yaml
+config/*.local.yaml
+config/local*.yaml
+
+# Local IDE / assistant state
+.vscode/
+.idea/
+.agents/
+.claude/
+AGENTS.md
+CLAUDE.md
+PROJECT_STATE.md
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+
+# Editor / document backup files
+.DS_Store
+Thumbs.db
+~$*
+*.tmp
+*.temp
+*.bak
+*.bkp
+
+# Runtime logs, temporary files, and generated validation outputs
+logs/
+outputs/
+tmp/
+tmp*/
+docs/test*_*.png
+docs/test*_*.svg
+
+# Build outputs
+build/
+dist/
+*.egg-info/
+cpp_runtime/build/
+cpp_runtime/build-*/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+*.vcxproj
+*.vcxproj.filters
+*.sln
+*.obj
+*.o
+*.pdb
+*.lib
+*.dll
+*.exe
+*.so
+*.dylib
+
+# Datasets, calibration dumps, checkpoints, and model/compiler artifacts
+calib_data/
+calib_images/
+checkpoints/
+Hailo_dataflow_compiler/
+*.hef
+*.onnx
+*.pt
+*.pth
+*.engine
+*.npy
+*.npz
+*.whl
+
+# Replay videos and generated archives
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.zip
+*.tar
+*.tar.gz
+*.tgz

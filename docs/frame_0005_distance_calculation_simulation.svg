@@ -1,0 +1,139 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1780" height="1180" viewBox="0 0 1780 1180" role="img" aria-labelledby="title desc">
+  <title id="title">Detailed distance calculation simulation for frame_0005.png</title>
+  <desc id="desc">Real output frame with numeric monocular distance calculations for the motorcycle and front car detections.</desc>
+  <defs>
+    <style>
+      .bg { fill: #f5f7fb; }
+      .panel { fill: #ffffff; stroke: #c7d2df; stroke-width: 2; rx: 8; }
+      .title { font: 700 30px Arial, sans-serif; fill: #142230; }
+      .sub { font: 17px Arial, sans-serif; fill: #536273; }
+      .h2 { font: 700 23px Arial, sans-serif; fill: #142230; }
+      .h3 { font: 700 18px Arial, sans-serif; fill: #1c2b38; }
+      .txt { font: 17px Arial, sans-serif; fill: #263443; }
+      .small { font: 14px Arial, sans-serif; fill: #536273; }
+      .mono { font: 15px Consolas, monospace; fill: #674500; }
+      .formula { font: 700 18px Arial, sans-serif; fill: #075a9a; }
+      .result { font: 700 21px Arial, sans-serif; fill: #00875f; }
+      .warn { font: 700 16px Arial, sans-serif; fill: #a45100; }
+      .axis { stroke: #ef476f; stroke-width: 3; stroke-dasharray: 12 8; }
+      .gate { fill: #4dabf7; opacity: 0.11; }
+      .motoBox { fill: rgba(142,108,216,0.10); stroke: #8e6cd8; stroke-width: 4; }
+      .carBox { fill: rgba(6,167,125,0.08); stroke: #06a77d; stroke-width: 4; }
+      .footMoto { fill: #8e6cd8; stroke: #ffffff; stroke-width: 3; }
+      .footCar { fill: #06a77d; stroke: #ffffff; stroke-width: 3; }
+      .measure { stroke: #142230; stroke-width: 2; stroke-dasharray: 6 5; }
+      .arrow { stroke: #075a9a; stroke-width: 4; fill: none; marker-end: url(#arrow); }
+      .arrow2 { stroke: #606f7f; stroke-width: 3; fill: none; marker-end: url(#arrow2); }
+      .note { fill: #eef7ff; stroke: #7aa7f7; stroke-width: 2; rx: 6; }
+      .ok { fill: #e9f8f1; stroke: #06a77d; stroke-width: 2; rx: 6; }
+      .call { fill: #fff6df; stroke: #f4a261; stroke-width: 2; rx: 6; }
+    </style>
+    <marker id="arrow" markerWidth="11" markerHeight="9" refX="10" refY="4.5" orient="auto">
+      <path d="M0,0 L11,4.5 L0,9 Z" fill="#075a9a"/>
+    </marker>
+    <marker id="arrow2" markerWidth="10" markerHeight="8" refX="9" refY="4" orient="auto">
+      <path d="M0,0 L10,4 L0,8 Z" fill="#606f7f"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" width="1780" height="1180"/>
+  <text x="40" y="52" class="title">Mô phỏng tính khoảng cách chi tiết trên frame_0005.png</text>
+  <text x="40" y="82" class="sub">Ảnh nguồn: outputs/test3_investigate_frames/frame_0005.png. Bbox được lấy gần đúng từ khung vàng có sẵn trong ảnh output.</text>
+
+  <!-- Real frame -->
+  <rect class="panel" x="30" y="105" width="1310" height="765"/>
+  <image href="../outputs/test3_investigate_frames/frame_0005.png" x="40" y="115" width="1280" height="720" preserveAspectRatio="xMidYMid meet"/>
+
+  <!-- Center gate, in image coordinates plus offset x=40,y=115. -->
+  <rect class="gate" x="449.1" y="115" width="460.8" height="720"/>
+  <line class="axis" x1="679.5" y1="115" x2="679.5" y2="835"/>
+  <text x="690" y="142" class="small">cx = 639.5 px</text>
+  <text x="455" y="855" class="small">center gate = [409.1, 869.9] px</text>
+
+  <!-- Motorcycle bbox [338,374,444,510] -->
+  <rect class="motoBox" x="378" y="489" width="106" height="136"/>
+  <circle class="footMoto" cx="484" cy="625" r="7"/>
+  <line class="measure" x1="493" y1="489" x2="493" y2="625"/>
+  <text x="503" y="560" class="small">h=136</text>
+  <line class="measure" x1="378" y1="634" x2="484" y2="634"/>
+  <text x="414" y="654" class="small">w=106</text>
+  <text x="378" y="476" class="small">motorcycle bbox [338,374,444,510]</text>
+  <line class="arrow2" x1="484" y1="625" x2="679.5" y2="625"/>
+  <text x="510" y="616" class="small">foot_u=x2 vì xe ở trái cx</text>
+
+  <!-- Car bbox [564,306,644,379] -->
+  <rect class="carBox" x="604" y="421" width="80" height="73"/>
+  <circle class="footCar" cx="679.5" cy="494" r="7"/>
+  <line class="measure" x1="692" y1="421" x2="692" y2="494"/>
+  <text x="702" y="462" class="small">h=73</text>
+  <line class="measure" x1="604" y1="504" x2="684" y2="504"/>
+  <text x="625" y="524" class="small">w=80</text>
+  <text x="598" y="408" class="small">car bbox ~[564,306,644,379]</text>
+  <text x="690" y="488" class="small">foot_u=cx</text>
+
+  <rect class="call" x="820" y="600" width="440" height="95"/>
+  <text x="842" y="630" class="h3">Ý nghĩa foot point</text>
+  <text x="842" y="658" class="txt">Nếu bbox không cắt trục giữa, code chọn cạnh</text>
+  <text x="842" y="682" class="txt">gần trục camera nhất để tính x_m.</text>
+  <path class="arrow" d="M820 648 C690 642, 570 628, 489 625"/>
+
+  <!-- Right calculation panel -->
+  <rect class="panel" x="1360" y="105" width="380" height="765"/>
+  <text x="1388" y="146" class="h2">Tính toán theo ObjectLocalizer</text>
+
+  <text x="1388" y="190" class="h3">0. Intrinsics mặc định</text>
+  <text x="1388" y="220" class="mono">W=1280, H=720, hfov=73.0°</text>
+  <text x="1388" y="248" class="mono">fx = fy = 640 / tan(36.5°)</text>
+  <text x="1388" y="276" class="result">fx = fy = 864.9 px</text>
+  <text x="1388" y="304" class="mono">cx = (1280-1)/2 = 639.5 px</text>
+
+  <text x="1388" y="350" class="h3">1. Motorcycle</text>
+  <text x="1388" y="380" class="mono">bbox_w = 444 - 338 = 106 px</text>
+  <text x="1388" y="408" class="mono">bbox_h = 510 - 374 = 136 px</text>
+  <text x="1388" y="436" class="mono">H_real = 1.0 m</text>
+  <text x="1388" y="464" class="formula">z = H_real * fy / bbox_h</text>
+  <text x="1388" y="492" class="mono">z = 1.0 * 864.9 / 136 = 6.36 m</text>
+  <text x="1388" y="520" class="mono">bottom_ratio = 510 / 720 = 0.708</text>
+  <text x="1388" y="548" class="mono">0.708 &lt; 0.78 → không bottom_cap</text>
+  <text x="1388" y="576" class="mono">foot_u = x2 = 444</text>
+  <text x="1388" y="604" class="mono">x_m = (444-639.5)/864.9 * 6.36</text>
+  <text x="1388" y="632" class="result">x_m = -1.44 m</text>
+  <text x="1388" y="660" class="result">distance = hypot(-1.44,6.36)=6.52m</text>
+  <text x="1388" y="688" class="warn">Tham khảo: z_width = 0.8*864.9/106 = 6.53m</text>
+
+  <text x="1388" y="735" class="h3">2. Car phía trước</text>
+  <text x="1388" y="765" class="mono">bbox_w = 644 - 564 = 80 px</text>
+  <text x="1388" y="793" class="mono">bbox_h = 379 - 306 = 73 px</text>
+  <text x="1388" y="821" class="mono">z = 1.5 * 864.9 / 73 = 17.77m</text>
+  <text x="1388" y="849" class="result">foot_u=cx → x_m=0, distance≈17.77m</text>
+
+  <!-- Bottom explanation -->
+  <rect class="panel" x="40" y="900" width="1700" height="220"/>
+  <text x="70" y="940" class="h2">Luồng tính từ bbox đến khoảng cách</text>
+
+  <rect class="ok" x="72" y="968" width="310" height="88"/>
+  <text x="92" y="998" class="h3">1. Bbox từ YOLO</text>
+  <text x="92" y="1026" class="txt">bbox_w = x2 - x1</text>
+  <text x="92" y="1050" class="txt">bbox_h = y2 - y1</text>
+
+  <path class="arrow" d="M392 1012 L462 1012"/>
+  <rect class="ok" x="480" y="968" width="360" height="88"/>
+  <text x="500" y="998" class="h3">2. Depth chính</text>
+  <text x="500" y="1026" class="txt">z = real_height * fy / bbox_h</text>
+  <text x="500" y="1050" class="txt">bottom_cap chỉ bật khi y2/H ≥ 0.78</text>
+
+  <path class="arrow" d="M850 1012 L920 1012"/>
+  <rect class="ok" x="938" y="968" width="340" height="88"/>
+  <text x="958" y="998" class="h3">3. Lateral pose</text>
+  <text x="958" y="1026" class="txt">x_m = (foot_u - cx) / fx * z</text>
+  <text x="958" y="1050" class="txt">foot_u là cạnh gần trục camera</text>
+
+  <path class="arrow" d="M1288 1012 L1358 1012"/>
+  <rect class="ok" x="1376" y="968" width="310" height="88"/>
+  <text x="1396" y="998" class="h3">4. Display</text>
+  <text x="1396" y="1026" class="txt">distance_m = hypot(x_m, z)</text>
+  <text x="1396" y="1050" class="txt">draw_detections hiển thị m</text>
+
+  <rect class="note" x="72" y="1078" width="1614" height="34"/>
+  <text x="92" y="1101" class="small">Ghi chú: label vàng trong ảnh nguồn được render từ cấu hình cũ. Mô phỏng này dùng hfov=73° mới, nên khoảng cách tính lại có thể khác nhãn cũ. Bbox phục vụ minh họa, không phải ground truth.</text>
+</svg>

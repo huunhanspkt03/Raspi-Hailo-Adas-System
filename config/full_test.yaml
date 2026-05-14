@@ -1,0 +1,56 @@
+# Full pipeline test: YOLO26s_seg 640 + YOLO26 640
+camera:
+  width: 1280
+  height: 720
+  fps: 30
+  use_gstreamer: false
+  usb_device_index: 0
+  prefer_low_latency: true
+  drop_frames: false
+  threaded_capture: true
+
+inference:
+  yolo26_hef: src/models/yolo26_adas_2404.hef
+  lane_segmentation_hef: src/models/yolo26s_seg.hef
+  target_arch: hailo8
+  conf_threshold: 0.30
+  yolo_input_size: 640
+  lane_segmentation_input_size: 640
+  input_dtype: uint8
+  use_raw_lane_mask: false
+
+pipeline:
+  branch_threading: true
+  branch_workers: 2
+
+features:
+  object_detection: true
+  lane_detection: true
+  behavior_logic: false
+  rc_control: false
+  visualization: true
+
+lane_detection:
+  min_lane_width_px: 40
+
+control:
+  steering_source: lane_marking_center
+  smoothing_enabled: true
+  smoothing_alpha: 0.25
+  behavior_smoothing_window: 5
+  behavior_release_frames: 3
+  steering_deadband_px: 10
+  max_steering_value: 1.0
+  default_throttle: 0.35
+  safe_throttle: 0.20
+  stop_throttle: 0.0
+
+visualization:
+  show_window: true
+  window_title: "Full Pipeline Test - YOLO26s_seg 640 + YOLO26 640"
+  display_width: 1280
+  fast_overlay: false
+
+logging:
+  level: INFO
+  log_dir: logs/

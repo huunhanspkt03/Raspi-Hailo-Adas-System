@@ -1,0 +1,36 @@
+# YOLO26s -> Hailo-8L model script (LOW-MEMORY profile for WSL 16GB).
+# Adapted from hailo_model_zoo yolov8s.alls but trimmed for hosts without
+# a real CUDA GPU (WSL2, CPU-only optimize).
+
+normalization1 = normalization([0.0, 0.0, 0.0], [255.0, 255.0, 255.0])
+
+# Keep compiler optimization maxed (compile step is cheap on memory);
+# drop optimize-for-power since WSL compile is a dev-only build.
+performance_param(compiler_optimization_level=max)
+
+# optimization_level=1 skips the memory-hungry global search.
+model_optimization_flavor(optimization_level=1)
+
+# Smaller calibset + batch_size=1 keeps TF/Keras histogram memory bounded.
+# 64 images is enough for min/max stats; bump to 256 if you have 32GB+.
+model_optimization_config(calibration, batch_size=1, calibset_size=64)
+
+# Skip percentile activation_clipping — this is what builds the
+# UniqueWithCounts tensor that OOMs on a 15GB host. The default
+# min/max clipping is good enough for yolov8/26 detection accuracy.
+# pre_quantization_optimization(activation_clipping, layers={*}, mode=percentile, clipping_values=[0.01, 99.99])
+
+# Weight clipping is cheap (weights are static) — keep it.
+pre_quantization_optimization(weights_clipping, layers={*}, mode=percentile, clipping_values=[0.01, 99.99])
+
+# Finetune disabled (would need GPU + a full labeled dataset).
+post_quantization_optimization(finetune, policy=disabled)
+
+# Allocator hint from Hailo Model Zoo yolov8* reference.
+allocator_param(width_splitter_defuse=disabled)
+
+# --- OPTIONAL: absorb sigmoid of cls heads into HEF ---
+# See yolo26n_hailo8l.alls for the full procedure.
+# change_output_activation(<cls_conv_stride8>, sigmoid)
+# change_output_activation(<cls_conv_stride16>, sigmoid)
+# change_output_activation(<cls_conv_stride32>, sigmoid)
