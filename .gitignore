@@ -59,6 +59,8 @@ dist/
 *.egg-info/
 cpp_runtime/build/
 cpp_runtime/build-*/
+cpp/build/
+cpp/build-*/
 cmake-build-*/
 CMakeFiles/
 CMakeCache.txt
