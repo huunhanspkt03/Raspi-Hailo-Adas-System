@@ -367,116 +367,285 @@ float boundary_x_at_y(const std::vector<cv::Point2f>& line, float y) {
     return (std::fabs(y - first.y) < std::fabs(y - last.y)) ? first.x : last.x;
 }
 
-// Nearest in-lane vehicle by z_m (else largest bbox). FCWS uses the strict
-// lane gate built from the learned purple lane width around the red centerline,
-// not the wider rendered drive corridor. Lane membership is decided only by
-// the bbox bottom-center point.
-std::optional<Detection> pick_strict_lane_vehicle(
-        const std::vector<Detection>& dets, const LaneGeometry& lane_geom,
-        const char* debug_role, FrameId debug_frame_id) {
-    if (dets.empty()) return std::nullopt;
+// ---- Layered front-object selection helpers (file-local) ----
+//
+// Lane membership for FCWS is decided by the bbox bottom-center point against a
+// strict lane gate built from the learned purple lane width around the red
+// centerline (NOT the wider rendered drive corridor). Selection is layered so a
+// close lead vehicle that briefly occludes the lane lines is still caught.
 
-    auto build_gate = [](const std::vector<cv::Point2f>& left,
-                         const std::vector<cv::Point2f>& right) {
-        std::vector<cv::Point2f> gate;
-        if (left.size() >= 2 && right.size() >= 2) {
-            gate.reserve(left.size() + right.size());
-            for (auto it = left.rbegin(); it != left.rend(); ++it) {
-                gate.push_back(*it);
-            }
-            for (const auto& p : right) gate.push_back(p);
-        }
-        return gate;
-    };
+// Inner lane band on lane_lateral_frac = (cx - left_x)/lane_w: 0.0 == strict
+// LEFT boundary, 1.0 == RIGHT boundary at foot_y. The inner 30%..90% band keeps
+// a slightly off-center lead vehicle while filtering adjacent-lane vehicles.
+constexpr float kInnerLaneMinFrac = 0.30f;
+constexpr float kInnerLaneMaxFrac = 0.85f;
 
-    std::vector<cv::Point2f> strict_gate;
-    if (lane_geom.valid) {
-        strict_gate = build_gate(lane_geom.strict_lane_left,
-                                 lane_geom.strict_lane_right);
+// Fixed near-ROI fail-safe bounds — close, centered, low-in-frame ONLY, so far
+// adjacent-lane vehicles can never enter through this path.
+constexpr float kNearRoiMaxDistM     = 6.0f;
+constexpr float kNearRoiMinXFrac     = 0.25f;
+constexpr float kNearRoiMaxXFrac     = 0.75f;
+constexpr float kNearRoiMinFootYFrac = 0.45f;
+
+// near_width_memory layer (layer 2): the remembered near band only ever judges
+// CLOSE vehicles, so a far adjacent-lane vehicle can never be selected through a
+// stale width. Match the fixed-ROI 6 m fail-safe so only truly near vehicles
+// can enter through this fallback.
+constexpr float kNearWidthMaxDistM   = 6.0f;
+// Sanity clamp on a remembered near-lane width, as a fraction of frame width.
+constexpr float kNearWidthMinFrac    = 0.04f;
+constexpr float kNearWidthMaxFrac    = 0.95f;
+
+// Concave-safe gate polygon: left boundary reversed + right boundary forward.
+std::vector<cv::Point2f> build_gate_polygon(
+        const std::vector<cv::Point2f>& left,
+        const std::vector<cv::Point2f>& right) {
+    std::vector<cv::Point2f> gate;
+    if (left.size() >= 2 && right.size() >= 2) {
+        gate.reserve(left.size() + right.size());
+        for (auto it = left.rbegin(); it != left.rend(); ++it) gate.push_back(*it);
+        for (const auto& p : right) gate.push_back(p);
     }
+    return gate;
+}
 
-    auto in_gate = [&](const Detection& d, const std::vector<cv::Point2f>& gate) {
-        GateDecision decision;
-        if (gate.size() < 3) {
-            decision.reason = "invalid_gate";
-            return decision;
-        }
-        // Inner-band acceptance on lane_lateral_frac = (cx - left_x)/lane_w,
-        // so 0.0 == strict-lane LEFT boundary, 1.0 == RIGHT boundary at foot_y.
-        // Band shifted right (was 0.20..0.80): the foot must be >=30% from the
-        // left edge into the lane and may sit out to the right boundary (100%).
-        constexpr float kInnerLaneMinFrac = 0.40f;
-        constexpr float kInnerLaneMaxFrac = 0.80f;
-
-        const cv::Rect2f& bb = d.bbox_img;
-        const float cx = bb.x + bb.width * 0.5f;
-        const float foot_y = bb.y + bb.height;
-        const cv::Point2f bottom_center(cx, foot_y);
-        decision.bottom_center_x = cx;
-        decision.foot_y = foot_y;
-        decision.bottom_center_signed_px =
-            cv::pointPolygonTest(gate, bottom_center, true);
-        const float left_x = boundary_x_at_y(lane_geom.strict_lane_left, foot_y);
-        const float right_x = boundary_x_at_y(lane_geom.strict_lane_right, foot_y);
-        const float lane_w = right_x - left_x;
-        if (std::isfinite(left_x) && std::isfinite(right_x) && lane_w > 1.0f) {
-            decision.lane_lateral_frac = (cx - left_x) / lane_w;
-        }
-        if (decision.bottom_center_signed_px >= 0.0 &&
-            std::isfinite(decision.lane_lateral_frac) &&
-            decision.lane_lateral_frac >= kInnerLaneMinFrac &&
-            decision.lane_lateral_frac <= kInnerLaneMaxFrac) {
-            decision.inside = true;
-            decision.reason = "inner_bottom_center";
-            return decision;
-        }
-        decision.reason = "inner_lane_reject";
+// Membership of one detection's bottom-center against an explicit (left,right)
+// strict-lane pair. Decoupled from LaneGeometry so it works for the current and
+// the held gate identically.
+GateDecision eval_gate(const Detection& d,
+                       const std::vector<cv::Point2f>& gate_poly,
+                       const std::vector<cv::Point2f>& left,
+                       const std::vector<cv::Point2f>& right) {
+    GateDecision decision;
+    if (gate_poly.size() < 3) { decision.reason = "invalid_gate"; return decision; }
+    const cv::Rect2f& bb = d.bbox_img;
+    const float cx = bb.x + bb.width * 0.5f;
+    const float foot_y = bb.y + bb.height;
+    decision.bottom_center_x = cx;
+    decision.foot_y = foot_y;
+    decision.bottom_center_signed_px =
+        cv::pointPolygonTest(gate_poly, cv::Point2f(cx, foot_y), true);
+    const float left_x = boundary_x_at_y(left, foot_y);
+    const float right_x = boundary_x_at_y(right, foot_y);
+    const float lane_w = right_x - left_x;
+    if (std::isfinite(left_x) && std::isfinite(right_x) && lane_w > 1.0f) {
+        decision.lane_lateral_frac = (cx - left_x) / lane_w;
+    }
+    if (decision.bottom_center_signed_px >= 0.0 &&
+        std::isfinite(decision.lane_lateral_frac) &&
+        decision.lane_lateral_frac >= kInnerLaneMinFrac &&
+        decision.lane_lateral_frac <= kInnerLaneMaxFrac) {
+        decision.inside = true;
+        decision.reason = "inner_bottom_center";
         return decision;
-    };
+    }
+    decision.reason = "inner_lane_reject";
+    return decision;
+}
 
-    // Nearest qualifying vehicle by z_m when monocular distance is available,
-    // else the largest bbox.
+// Closest qualifying vehicle (nearest z_m, else largest bbox) inside the gate
+// described by (left,right). gate_name tags the layer in the debug trace.
+std::optional<Detection> select_in_gate(
+        const std::vector<Detection>& dets,
+        const std::vector<cv::Point2f>& left,
+        const std::vector<cv::Point2f>& right,
+        const char* role, const char* gate_name,
+        FrameId frame_id) {
+    const std::vector<cv::Point2f> gate = build_gate_polygon(left, right);
+    if (gate.size() < 3) return std::nullopt;
+
     const Detection* best_pose = nullptr;
     float best_z = std::numeric_limits<float>::infinity();
     const Detection* best_area = nullptr;
     float best_area_val = 0.f;
     for (const auto& d : dets) {
         if (!yolo26_is_vehicle(d.class_id)) continue;
-        GateDecision gate_decision = in_gate(d, strict_gate);
+        const GateDecision gd = eval_gate(d, gate, left, right);
         if (debug_fcws_gate()) {
+            const float left_x = boundary_x_at_y(left, gd.foot_y);
+            const float right_x = boundary_x_at_y(right, gd.foot_y);
             const cv::Rect2f& bb = d.bbox_img;
-            const float left_x = boundary_x_at_y(lane_geom.strict_lane_left,
-                                                 gate_decision.foot_y);
-            const float right_x = boundary_x_at_y(lane_geom.strict_lane_right,
-                                                  gate_decision.foot_y);
-            std::cerr << "[fcws_gate] role=" << debug_role
-                      << " frame=" << static_cast<unsigned long long>(debug_frame_id)
+            std::cerr << "[fcws_gate] role=" << role << " gate=" << gate_name
+                      << " frame=" << static_cast<unsigned long long>(frame_id)
                       << " class=" << yolo26_class_name(d.class_id)
                       << " tid=" << d.track_id
-                      << " pass=" << (gate_decision.inside ? 1 : 0)
-                      << " reason=" << gate_decision.reason
-                      << " bc=(" << gate_decision.bottom_center_x << ","
-                      << gate_decision.foot_y << ")"
-                      << " signed_px=" << gate_decision.bottom_center_signed_px
-                      << " lane_frac=" << gate_decision.lane_lateral_frac
+                      << " pass=" << (gd.inside ? 1 : 0)
+                      << " reason=" << gd.reason
+                      << " bc=(" << gd.bottom_center_x << "," << gd.foot_y << ")"
+                      << " signed_px=" << gd.bottom_center_signed_px
+                      << " lane_frac=" << gd.lane_lateral_frac
                       << " gate_x_at_y=[" << left_x << "," << right_x << "]"
                       << " bbox=(" << bb.x << "," << bb.y << ","
                       << bb.width << "," << bb.height << ")"
-                      << " x_m=" << d.x_m
-                      << " z_m=" << d.z_m
+                      << " x_m=" << d.x_m << " z_m=" << d.z_m
                       << " display=" << d.display_distance_m
                       << " dist_valid=" << (d.distance_display_valid ? 1 : 0)
                       << "\n";
         }
-        if (!gate_decision.inside) continue;
+        if (!gd.inside) continue;
         if (d.pose_valid && d.distance_display_valid && d.z_m > 0.0f) {
             if (d.z_m < best_z) { best_z = d.z_m; best_pose = &d; }
         }
         const float area = d.bbox_img.width * d.bbox_img.height;
         if (area > best_area_val) { best_area_val = area; best_area = &d; }
     }
-    if (best_pose != nullptr) return *best_pose;
-    if (best_area != nullptr) return *best_area;
+    const Detection* chosen = best_pose ? best_pose : best_area;
+    if (chosen != nullptr && debug_fcws_gate()) {
+        std::cerr << "[fcws_gate] role=" << role << " gate=" << gate_name
+                  << " SELECTED tid=" << chosen->track_id
+                  << " class=" << yolo26_class_name(chosen->class_id)
+                  << " display=" << chosen->display_distance_m
+                  << " z_m=" << chosen->z_m << "\n";
+    }
+    if (chosen != nullptr) return *chosen;
+    return std::nullopt;
+}
+
+// Near-lane width + center from a valid strict gate, sampled at the near
+// (largest-y / closest-to-camera) row both boundaries cover. Returns false if
+// the geometry is degenerate. Only scalars are kept — NOT the polygon.
+bool near_lane_width_center(const std::vector<cv::Point2f>& left,
+                            const std::vector<cv::Point2f>& right,
+                            float* width_px, float* center_x) {
+    if (left.size() < 2 || right.size() < 2) return false;
+    auto max_y = [](const std::vector<cv::Point2f>& l) {
+        float m = -1e30f;
+        for (const auto& p : l) m = std::max(m, p.y);
+        return m;
+    };
+    const float near_y = std::min(max_y(left), max_y(right));
+    const float lx = boundary_x_at_y(left, near_y);
+    const float rx = boundary_x_at_y(right, near_y);
+    if (!std::isfinite(lx) || !std::isfinite(rx)) return false;
+    const float w = rx - lx;
+    if (!(w > 1.0f)) return false;
+    *width_px  = w;
+    *center_x  = 0.5f * (lx + rx);
+    return true;
+}
+
+// Center x for the rebuilt near band, preferring the CURRENT red center
+// near-bottom, then the last remembered near center, then image center.
+float pick_near_center_x(const LaneGeometry& g,
+                         const FrontObjectNearLaneMemory& mem,
+                         int frame_w, const char** src) {
+    if (!g.fitted_pts_img.empty()) {           // current red centerline near-bottom
+        const cv::Point2f* near = &g.fitted_pts_img.front();
+        for (const auto& p : g.fitted_pts_img) if (p.y > near->y) near = &p;
+        *src = "red_center";
+        return near->x;
+    }
+    if (mem.usable()) { *src = "mem_center"; return mem.near_center_x(); }
+    *src = "frame_center";
+    return 0.5f * static_cast<float>(frame_w);
+}
+
+// Layer 2: near_width_memory. Rebuild a simple symmetric near band of the
+// remembered lane width around `center_x` and accept only CLOSE vehicles whose
+// bottom-center sits in the inner band. No stale polygon is replayed — just the
+// scalar width. Picks the nearest accepted vehicle by display distance.
+std::optional<Detection> select_near_width_gate(
+        const std::vector<Detection>& dets,
+        float center_x, float near_width_px, const char* center_src,
+        int age, const char* role, FrameId frame_id) {
+    const float half = 0.5f * near_width_px;
+    if (!(half > 0.5f)) return std::nullopt;
+    const float left_x  = center_x - half;
+    const float right_x = center_x + half;
+    const float band_w  = right_x - left_x;
+    const Detection* best = nullptr;
+    float best_dist = std::numeric_limits<float>::infinity();
+    for (const auto& d : dets) {
+        if (!yolo26_is_vehicle(d.class_id)) continue;
+        const cv::Rect2f& bb = d.bbox_img;
+        const float cx = bb.x + bb.width * 0.5f;
+        const float foot_y = bb.y + bb.height;
+        const bool close = d.distance_display_valid && d.display_distance_m >= 0.0f &&
+                           d.display_distance_m <= kNearWidthMaxDistM;
+        float frac = std::numeric_limits<float>::quiet_NaN();
+        bool inside = false;
+        const char* reason = "near_reject";
+        if (!close) {
+            reason = "near_too_far";
+        } else {
+            frac = (cx - left_x) / band_w;
+            if (cx >= left_x && cx <= right_x &&
+                frac >= kInnerLaneMinFrac && frac <= kInnerLaneMaxFrac) {
+                inside = true;
+                reason = "near_inner_band";
+            }
+        }
+        if (debug_fcws_gate()) {
+            std::cerr << "[fcws_gate] role=" << role << " gate=near_width_memory"
+                      << " age=" << age
+                      << " width_px=" << near_width_px
+                      << " center_x=" << center_x
+                      << " center_src=" << center_src
+                      << " frame=" << static_cast<unsigned long long>(frame_id)
+                      << " class=" << yolo26_class_name(d.class_id)
+                      << " tid=" << d.track_id
+                      << " pass=" << (inside ? 1 : 0)
+                      << " reason=" << reason
+                      << " bc=(" << cx << "," << foot_y << ")"
+                      << " band=[" << left_x << "," << right_x << "]"
+                      << " lane_frac=" << frac
+                      << " display=" << d.display_distance_m
+                      << " dist_valid=" << (d.distance_display_valid ? 1 : 0)
+                      << "\n";
+        }
+        if (inside && d.display_distance_m < best_dist) {
+            best_dist = d.display_distance_m;
+            best = &d;
+        }
+    }
+    if (best != nullptr && debug_fcws_gate()) {
+        std::cerr << "[fcws_gate] role=" << role << " gate=near_width_memory"
+                  << " SELECTED tid=" << best->track_id
+                  << " class=" << yolo26_class_name(best->class_id)
+                  << " display=" << best->display_distance_m << "\n";
+    }
+    if (best != nullptr) return *best;
+    return std::nullopt;
+}
+
+// Layer 3: fixed near-pixel ROI fail-safe. A very close vehicle can hide
+// purple/lane cues so BOTH the strict gate and the near-width memory miss it.
+// Accept ONLY a close, centered, low-in-frame vehicle; nearest by distance.
+std::optional<Detection> select_fixed_near_roi(
+        const std::vector<Detection>& dets, int frame_w, int frame_h,
+        const char* role, FrameId frame_id) {
+    if (frame_w <= 0 || frame_h <= 0) return std::nullopt;
+    const Detection* best = nullptr;
+    float best_dist = std::numeric_limits<float>::infinity();
+    for (const auto& d : dets) {
+        if (!yolo26_is_vehicle(d.class_id)) continue;
+        if (!(d.distance_display_valid && d.display_distance_m >= 0.0f &&
+              d.display_distance_m <= kNearRoiMaxDistM)) continue;
+        const cv::Rect2f& bb = d.bbox_img;
+        const float cx = bb.x + bb.width * 0.5f;
+        const float foot_y = bb.y + bb.height;
+        const float x_frac = cx / static_cast<float>(frame_w);
+        const float y_frac = foot_y / static_cast<float>(frame_h);
+        if (x_frac >= kNearRoiMinXFrac && x_frac <= kNearRoiMaxXFrac &&
+            y_frac >= kNearRoiMinFootYFrac && d.display_distance_m < best_dist) {
+            best_dist = d.display_distance_m;
+            best = &d;
+        }
+    }
+    if (best != nullptr && debug_fcws_gate()) {
+        const cv::Rect2f& bb = best->bbox_img;
+        const float cx = bb.x + bb.width * 0.5f;
+        const float foot_y = bb.y + bb.height;
+        std::cerr << "[fcws_gate] role=" << role << " gate=fixed_near_roi"
+                  << " frame=" << static_cast<unsigned long long>(frame_id)
+                  << " class=" << yolo26_class_name(best->class_id)
+                  << " tid=" << best->track_id
+                  << " display=" << best->display_distance_m
+                  << " x_frac=" << (cx / static_cast<float>(frame_w))
+                  << " foot_y_frac=" << (foot_y / static_cast<float>(frame_h))
+                  << " bc=(" << cx << "," << foot_y << ")\n";
+    }
+    if (best != nullptr) return *best;
     return std::nullopt;
 }
 
@@ -485,9 +654,59 @@ std::optional<Detection> pick_strict_lane_vehicle(
 std::optional<Detection> pick_front_object(const std::vector<Detection>& dets,
                                            const LaneGeometry& lane_geom,
                                            int frame_w, int frame_h,
+                                           FrontObjectNearLaneMemory& near_mem,
                                            FrameId debug_frame_id) {
-    (void)frame_w; (void)frame_h;
-    return pick_strict_lane_vehicle(dets, lane_geom, "front", debug_frame_id);
+    // The current strict gate is usable only when the parity path produced a
+    // real strict lane gate this frame. A close lead vehicle that occludes the
+    // purple lines leaves strict_lane_* empty even while lane_geom.valid holds.
+    const bool current_usable =
+        lane_geom.valid &&
+        lane_geom.strict_lane_left.size() >= 2 &&
+        lane_geom.strict_lane_right.size() >= 2;
+
+    // Maintain the near-lane-WIDTH memory (scalars only) from the current valid
+    // strict gate. Width is sanity-clamped so an absurd fit can't widen the
+    // fallback band.
+    if (current_usable) {
+        float w_px = 0.0f, c_x = 0.0f;
+        if (near_lane_width_center(lane_geom.strict_lane_left,
+                                   lane_geom.strict_lane_right, &w_px, &c_x)) {
+            const float min_w = kNearWidthMinFrac * static_cast<float>(frame_w);
+            const float max_w = kNearWidthMaxFrac * static_cast<float>(frame_w);
+            near_mem.store(std::clamp(w_px, min_w, max_w), c_x);
+        } else {
+            near_mem.tick_invalid();
+        }
+    } else {
+        near_mem.tick_invalid();
+    }
+
+    // Layer 1 — current strict gate.
+    if (current_usable) {
+        auto sel = select_in_gate(dets, lane_geom.strict_lane_left,
+                                  lane_geom.strict_lane_right,
+                                  "front", "current_strict", debug_frame_id);
+        if (sel) return sel;
+    }
+
+    // Layer 2 — near_width_memory: remembered near width re-centered on the
+    // current red center, judging CLOSE vehicles only. Only consulted when the
+    // current gate is unusable (occlusion); expires after kMaxHeldFrames, after
+    // which only the fixed ROI remains.
+    if (!current_usable && near_mem.usable()) {
+        const char* csrc = "frame_center";
+        const float center_x =
+            pick_near_center_x(lane_geom, near_mem, frame_w, &csrc);
+        auto sel = select_near_width_gate(dets, center_x,
+                                          near_mem.near_width_px(), csrc,
+                                          near_mem.age(), "front",
+                                          debug_frame_id);
+        if (sel) return sel;
+    }
+
+    // Layer 3 — fixed near-pixel ROI fail-safe (close + centered vehicles only).
+    return select_fixed_near_roi(dets, frame_w, frame_h, "front",
+                                 debug_frame_id);
 }
 
 }  // namespace adas

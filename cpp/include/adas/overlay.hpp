@@ -16,7 +16,6 @@ namespace adas {
 
 struct OverlayConfig {
     bool show_hud{true};
-    bool fast_overlay{false};
     bool hailo_active{true};
     int  display_width{960};
     // Python-parity operator HUD elements (src/pipeline/postprocessor.py):

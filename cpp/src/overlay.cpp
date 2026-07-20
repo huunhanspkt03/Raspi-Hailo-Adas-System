@@ -757,7 +757,7 @@ cv::Mat render_overlay(const BehaviorPacket& pkt, float display_fps, const Overl
             // Translucent green lane area fill.
             blend_mask_color(out, lp.lane_area, cv::Scalar(110, 220, 90), 0.30);
         }
-        if (!cfg.fast_overlay && !lp.line_union.empty()) {
+        if (!lp.line_union.empty()) {
             // Subtle line marking highlight.
             blend_mask_color(out, lp.line_union, cv::Scalar(255, 255, 0), 0.55);
         }

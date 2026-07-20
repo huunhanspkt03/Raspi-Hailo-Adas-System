@@ -36,13 +36,32 @@ float red_center_x_at_y(const std::vector<cv::Point2f>& red_center, float y) {
     return last.x;
 }
 
+// Steering lane-evaluation ROI expressed as image-height fractions (mirrors
+// LaneGeometryConfig::roi_top_frac). Steering follows the red centerline only
+// inside this band, which keeps the servo on the near, reliable rows instead of
+// the noisy vanishing region near the top of the rendered polyline:
+//   * kSteerEvalTopFrac  — start evaluating the lane at 0.55H from the image
+//                          top (the lookahead row).
+//   * kSteerEvalBandFrac — the band extends ~0.40H further down toward the
+//                          bottom for the near row. The near sample is clamped
+//                          to the geometry's actual near end (≈0.72H render
+//                          bottom) by red_center_x_at_y, so this only widens
+//                          the band as far as the existing geometry provides.
+constexpr float kSteerEvalTopFrac{0.55f};
+constexpr float kSteerEvalBandFrac{0.40f};
+
 }  // namespace
 
 float compute_steering(const LaneGeometry& geom, int frame_w, int frame_h) {
     if (!geom.valid || geom.fitted_pts_img.empty()) return 0.0f;
-    (void)frame_h;
-    const float y_look = geom.fitted_pts_img.front().y;
-    const float y_near = geom.fitted_pts_img.back().y;
+    const float fit_top  = geom.fitted_pts_img.front().y;  // far / top of fit
+    const float fit_near = geom.fitted_pts_img.back().y;   // near / bottom of fit
+    const float h = static_cast<float>(frame_h);
+    // Lookahead row at 0.55H, clamped into the fitted span. Near row at
+    // 0.55H+0.40H=0.95H, clamped to the fit's near end by red_center_x_at_y.
+    const float y_look = std::clamp(kSteerEvalTopFrac * h, fit_top, fit_near);
+    const float y_near = std::clamp(
+        (kSteerEvalTopFrac + kSteerEvalBandFrac) * h, y_look, fit_near);
     const float x_look = red_center_x_at_y(geom.fitted_pts_img, y_look);
     const float x_near = red_center_x_at_y(geom.fitted_pts_img, y_near);
     if (!std::isfinite(x_look) || !std::isfinite(x_near)) return 0.0f;

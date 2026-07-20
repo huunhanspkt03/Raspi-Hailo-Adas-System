@@ -31,6 +31,7 @@
 #include "adas/overlay.hpp"
 #include "adas/rc_actuator.hpp"
 #include "adas/stage_timer.hpp"
+#include "adas/steering_stabilizer.hpp"
 #include "adas/types.hpp"
 
 namespace adas {
@@ -141,6 +142,19 @@ private:
     // forward-declared in lane_parity.hpp (impl lives in the .cpp).
     // Constructed in run() — python_parity is the only lane path.
     LaneBoundaryTracker* parity_tracker_{nullptr};
+
+    // Layered front-object gate memory: near-lane WIDTH from the last valid
+    // strict gate, reused for a short window when a close lead vehicle occludes
+    // the lane lines. Touched only by the lane worker's fusion step (single
+    // thread) — no lock.
+    FrontObjectNearLaneMemory front_near_lane_mem_;
+
+    // Temporal steering stabilization. Owned by (and called only from) the
+    // lane worker, single-threaded. Smooths the raw per-frame compute_steering
+    // value before it reaches fusion/RC so the servo follows the same
+    // stabilized signal as the displayed red path. Mirrors the Python
+    // controller smoothing chain that the C++ path previously skipped.
+    SteeringStabilizer steering_stabilizer_;
 
     // Optional GPS reader. Constructed only when cfg_.gps.enabled.
     std::unique_ptr<GpsReader> gps_;

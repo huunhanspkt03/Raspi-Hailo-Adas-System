@@ -15,13 +15,21 @@
 
 namespace adas {
 
+// Defined in object_detection.hpp; held by the runtime/fusion path so the
+// layered front-object gate can reuse the last valid NEAR-LANE WIDTH across
+// frames. Passed by reference (incomplete type is fine for a reference param).
+class FrontObjectNearLaneMemory;
+
 constexpr int kStaleFrameTolerance = 8;
 
 // `objects` is a borrowed pointer into the lane worker's shared object-packet
 // cache (nullptr when no fresh object is in tolerance). fuse() makes exactly
 // one mutable copy of it to stamp front_object/speed_object into bp.objects.
+// `near_mem` carries the layered front-object gate's near-lane-width memory and
+// is updated on every call that has an object packet.
 // TODO(adas-cpp/full): port full safety_supervisor/control behavior.
-BehaviorPacket fuse(const LanePacket& lane, const ObjectPacket* objects);
+BehaviorPacket fuse(const LanePacket& lane, const ObjectPacket* objects,
+                    FrontObjectNearLaneMemory& near_mem);
 
 // (fuse_object_driven was removed with the alternate scheduler — the lane
 // worker drives every render packet in the parallel schedule.)
