@@ -19,7 +19,6 @@ namespace adas {
 //   --width / --height / --fps
 //   --display-width <N>         resize for cv::imshow (default 960)
 //   --display-every-n <N>       render/show every Nth output packet
-//   --fast-overlay              cheaper overlay variant
 //   --loop-video                loop a finite video source
 int parse_cli(int argc, char** argv, RuntimeConfig* cfg, std::string* error);
 

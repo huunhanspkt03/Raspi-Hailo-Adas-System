@@ -1,363 +1,406 @@
-# adas_cpp — parallel C++ runtime
+# adas_cpp - Raspberry Pi 5 + Hailo ADAS runtime
 
-This is a **new, parallel** C++ implementation of the ADAS pipeline for
-Raspberry Pi 5 + Hailo-8L. The Python runtime under `../src` remains the
-reference/fallback; nothing in `../src` is changed by this work.
+`adas_cpp` is the C++17 runtime for the Raspberry Pi 5 + Hailo-8L ADAS
+pipeline. The Python implementation under `../src` remains the reference and
+development fallback.
 
-## Status (milestone 1)
+The current C++ build supports one production pipeline configuration:
 
-| Subsystem        | Status        | Source-of-truth (Python)                          |
-|------------------|---------------|---------------------------------------------------|
-| CMake build      | ✅ done       | —                                                 |
-| Capture (CSI + video) | ✅ done   | `src/pipeline/camera.py`, `camera_video.py`       |
-| HailoRT C++ wrap | ✅ done       | `src/pipeline/hailo_backend.py`                   |
-| Lane preprocess  | ✅ done       | `src/pipeline/preprocessor.py::preprocess_lane_semantic` |
-| STDC1 decode     | ✅ done       | `src/features/lane_semantic_postprocess.py`       |
-| Lane geometry    | ✅ done       | `src/features/lane_path.py::mask_centerline`      |
-| Steering         | ✅ basic      | `src/features/lane_target_resolver.py` (subset)   |
-| Overlay          | ✅ basic      | `src/pipeline/output_renderer.py` (subset)        |
-| Threaded runtime | ✅ done       | `src/pipeline/threaded_runtime.py`                |
-| YOLO26 decode    | ✅ done       | `src/features/object_detection.py`, `yolo26_raw_head.py` |
-| Object distance  | ✅ basic      | `src/features/object_localizer*.py` (road-vehicle subset) |
-| Object tracker   | ⚠ identity    | `src/features/object_tracker.py`                  |
-| Behavior         | ⚠ basic       | `src/features/behavior_logic.py`                  |
-| Fusion (full)    | ⚠ partial     | `src/pipeline/fusion_worker.py`                   |
-| RC actuator      | ⏳ **stub**   | `src/features/control_runner.py`                  |
-| Multiprocess render (Stage A parity) | ❌ not planned | `src/pipeline/mp_render.py` |
-
-The lane path is feature-complete enough to run on Pi against a CSI camera
-or a video file, draw the lane area + red centerline + yellow corridor, and
-report a steering scalar. YOLO26 raw-head decode is also wired for
-`--mode detection` and `--mode full`; tracking, behavior smoothing, and RC
-actuation remain intentionally lightweight/TODO ports.
-
-## Layout
-
-```
-cpp/
-├── CMakeLists.txt
-├── README.md                 ← you are here
-├── include/adas/             ← public headers (types, capture, hailo,
-│   ├── types.hpp                lane_decode, lane_geometry, overlay,
-│   ├── latest_queue.hpp         object_detection, behavior (partial),
-│   ├── capture.hpp              fusion (partial), runtime, cli, ...)
-│   ├── hailo_inference.hpp
-│   ├── lane_decode.hpp
-│   ├── lane_geometry.hpp
-│   ├── overlay.hpp
-│   ├── object_detection.hpp
-│   ├── behavior.hpp          ← partial behavior policy
-│   ├── fusion.hpp            ← partial safety/control port
-│   ├── runtime.hpp
-│   └── cli.hpp
-└── src/                      ← implementations + main + partial ports
+```text
+mode            full
+lane mode       python_parity
+model schedule  parallel
 ```
 
-## Build (Raspberry Pi 5, Bookworm aarch64)
+Lane-only, detection-only, image lane geometry, and the alternate Hailo
+schedule have been removed. The CLI rejects those old values rather than
+silently running a different pipeline.
 
-Prerequisites:
+## Current status
+
+| Subsystem | Status | Current behavior |
+|---|---|---|
+| CMake/OpenCV build | Implemented | C++17 executable `adas_cpp` |
+| CSI, USB, video capture | Implemented | OpenCV + GStreamer/V4L2 |
+| HailoRT wrapper | Implemented | Separate STDC1 and YOLO26 pipelines |
+| STDC1 lane decode | Implemented | Four-class semantic mask decode |
+| Lane geometry | Implemented | Boundary tracker, red center, strict lane gate, corridor |
+| Steering | Implemented | Red-center shape to normalized `[-1, 1]` command |
+| YOLO26 object decode | Implemented | Six raw heads, confidence filter, top-k |
+| Object tracking | Implemented, lightweight | Previous-frame greedy IoU association |
+| Monocular distance | Implemented | Size and ground-plane cue fusion with track smoothing |
+| Lane/object fusion | Implemented | Freshest compatible object packet fused into each lane packet |
+| Longitudinal control | Implemented | Distance-based following plus speed-sign throttle ceiling |
+| Safety governor | Implemented | STOP/CAUTION hysteresis and stale-data supervision |
+| GPS | Implemented | UART NMEA reader; speed affects the following caution distance |
+| RC actuator | Implemented | Servo + forward-only BTS7960, watchdog, log-only mode |
+| Operator overlay | Implemented | Lane, detections, LDWS/LKAS, FCWS, GPS, speed-limit HUD |
+| Automated C++ tests | Not implemented | Build and Pi replay/live validation are currently required |
+
+The tracker is intentionally lighter than ByteTrack, and some lane-area
+weighting and stability gates are approximations of the Python reference.
+
+## Runtime architecture
+
+```text
+capture thread
+  |-- every frame --------> lane queue --> STDC1 --> lane geometry --+
+  `-- every Nth frame ----> object queue --> YOLO26 --> distance ----+--> fusion
+                                                                      |
+                                                                      v
+                                                            behavior/render thread
+                                                              |-- overlay/display
+                                                              |-- video writer
+                                                              `-- safety --> RC
+```
+
+All inter-stage queues are bounded `LatestQueue` instances with capacity one.
+When a consumer falls behind, the oldest queued item is dropped. This keeps
+the system close to real time instead of accumulating latency.
+
+The lane branch drives fusion and rendering. YOLO runs every
+`--object-every-n` captured frames, default `2`. Fusion accepts the newest
+object packet satisfying:
+
+```text
+object.frame_id <= lane.frame_id
+lane.frame_id - object.frame_id <= 8
+```
+
+Values of `--object-every-n` above `8` are clamped to `8`, because they would
+otherwise exceed the fusion stale-packet tolerance.
+
+## Build
+
+### Raspberry Pi 5, Bookworm, aarch64
 
 ```bash
 sudo apt update
 sudo apt install -y build-essential cmake pkg-config \
-                    libopencv-dev libgstreamer1.0-dev \
-                    gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
-                    gstreamer1.0-libcamera gstreamer1.0-plugins-bad
-# HailoRT + Hailo PCIe driver + libcamera integration
+    libopencv-dev libgstreamer1.0-dev \
+    gstreamer1.0-plugins-base gstreamer1.0-plugins-good \
+    gstreamer1.0-libcamera gstreamer1.0-plugins-bad
+
 sudo apt install -y hailo-all
-sudo reboot     # required after hailo-all install
+sudo reboot
 ```
 
-Build:
+From the repository root:
 
 ```bash
-cd cpp
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build -j
-# Binary lives at: cpp/build/adas_cpp
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release
+cmake --build cpp/build -j
 ```
 
-On dev machines without `/dev/hailo0`:
+The executable is `cpp/build/adas_cpp`.
+
+### Development build without Hailo
 
 ```bash
-# Skip Hailo entirely — useful to validate that the code compiles and
-# capture/overlay paths work; inference returns empty outputs.
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release -DADAS_USE_HAILO=OFF
-cmake --build build -j
+cmake -S cpp -B cpp/build -DCMAKE_BUILD_TYPE=Release -DADAS_USE_HAILO=OFF
+cmake --build cpp/build -j
 ```
 
-## Run commands
+The non-Hailo backend is a compile/smoke-test stub. It does not produce lane
+or object inference results and is not a product acceptance path.
 
-All commands are run from the repository root (one level above `cpp/`)
-so the default HEF / video paths under `src/models/` resolve.
+## Run
 
-### Video lane-only (recommended first run)
+Run commands from the repository root so the default model paths resolve:
 
-```bash
-./cpp/build/adas_cpp \
-    --video test4_720p30.mp4 \
-    --mode lane \
-    --display-width 960
+```text
+src/models/stdc1_lane_640.hef
+src/models/yolo26n_object.hef
 ```
 
-### Video full mode
-
-Uses the default YOLO HEF at `src/models/yolo26n_object.hef`, runs object
-inference every second captured frame by default, and fuses the freshest
-object packet whose `frame_id <= lane.frame_id`.
+### Video replay
 
 ```bash
 ./cpp/build/adas_cpp \
-    --video test4_720p30.mp4 \
+    --video video_test3.mp4 \
     --mode full \
+    --lane-mode python_parity \
+    --model-schedule parallel \
     --display-width 960
 ```
 
-#### Full mode — model scheduling
-
-In full mode both lane (STDC1) and YOLO26 run on the same Hailo-8L. The
-`--model-schedule` flag picks how the two models share the device:
-
-```
---model-schedule parallel   (default; backwards compatible)
---model-schedule alternate
-```
-
-- `parallel` — lane is enqueued for every captured frame; YOLO is
-  enqueued every Nth frame (`--object-every-n`). The two models may
-  infer concurrently on Hailo, which is the source of the contention
-  observed at `--object-every-n 1` (lane/object infer rise to
-  ~34–36 ms).
-- `alternate` — each captured frame is enqueued to exactly one Hailo
-  branch. Lane and YOLO take strict turns (frame 1 → lane, frame 2 →
-  YOLO, frame 3 → lane, ...). Only one model runs per frame, so Hailo
-  contention is eliminated and the per-inference latency drops back to
-  the single-model numbers (~10 ms object, ~21 ms lane).
-
-  In this mode the object worker emits a render packet using the most
-  recent cached `LanePacket`, so the display still updates on every
-  captured frame even though each individual perception output is at
-  half the source rate. `--object-every-n` is ignored. The HUD shows a
-  small "alternate" icon (two crossed arrows) instead of the parallel
-  icon (two up arrows).
-
-  Limitation: lane and object outputs each refresh at half the capture
-  FPS. Front-object selection on the object-driven render packets uses
-  the cached corridor (1 frame stale at 30 fps capture, ~33 ms).
-
-Example:
-
-```bash
-./cpp/build/adas_cpp \
-    --video test4_720p30.mp4 \
-    --mode full --model-schedule alternate \
-    --display-width 960
-```
-
-#### Operator HUD (Python-parity)
-
-The renderer mirrors the Python operator UI from
-`src/pipeline/postprocessor.py`:
-
-- Per-detection bounding boxes are colored by warning zone (red=STOP,
-  orange=CAUTION, green=MONITOR) when the foot point sits inside the
-  visible corridor's bands; a small zone-coded warning glyph
-  (octagon / triangle / speedometer) is drawn near the bbox top-right.
-- A translucent **warning HUD** panel renders over the lower windshield/hood
-  area when a
-  front object falls inside a warning band: large zone icon + the
-  STOP / CAUTION / MONITOR label, with an optional distance line when
-  the C++ Detection has distance data populated.
-- A **lane-keep arrow** panel renders in the lower-right hood area with a vector
-  arrow
-  pointing straight / left / right, driven by corridor curvature
-  first and steering as the fallback.
-
-All icons are drawn with OpenCV primitives — no PNG decode, no
-per-frame asset loading. Toggle individually via
-`OverlayConfig::show_warning_hud` and `OverlayConfig::show_lane_keep_icon`
-(no CLI flags yet; both default to true).
-
-### Video detection-only mode
-
-```bash
-./cpp/build/adas_cpp \
-    --video test4_720p30.mp4 \
-    --mode detection \
-    --display-width 960
-```
-
-### Live CSI camera, full mode
+### Live CSI camera
 
 ```bash
 ./cpp/build/adas_cpp \
     --camera csi \
     --width 1280 --height 720 --fps 30 \
     --mode full \
-    --display-width 960
+    --lane-mode python_parity \
+    --model-schedule parallel \
+    --display-width 1280
 ```
 
-If the Pi display/render path is the bottleneck, keep perception live but
-render fewer preview frames:
+### Operator preset
+
+`--operator-mode` applies:
+
+```text
+1280x720 at 30 FPS
+display width 1280
+GPS enabled
+RC enabled
+quiet logs enabled
+```
+
+It does not choose the input source:
+
+```bash
+./cpp/build/adas_cpp --camera csi --operator-mode
+```
+
+This command arms the RC layer. During bench testing, add `--rc-log-only`:
 
 ```bash
 ./cpp/build/adas_cpp \
     --camera csi \
-    --width 1280 --height 720 --fps 30 \
-    --mode full \
-    --display-width 960 \
-    --display-every-n 2
+    --operator-mode \
+    --rc-log-only
 ```
 
-`--save-video` forces `--display-every-n 1` so recorded outputs keep every
-annotated frame.
-
-### Headless smoke / dry-run
-
-The `--dry-run [N]` flag runs `N` frames without opening a window or
-calling `cv::imshow`, then exits. Useful for CI / first build sanity:
+### Headless smoke test
 
 ```bash
-./cpp/build/adas_cpp --video test4_720p30.mp4 --mode lane --dry-run 30
-# Expected: stderr lines for capture/lane/render counts and final
-#   [runtime] stop | captured=… lane=… rendered=… elapsed=…s
+./cpp/build/adas_cpp \
+    --video video_test3.mp4 \
+    --mode full \
+    --dry-run 30
 ```
+
+`--dry-run` disables the display and exits after the requested number of
+rendered packets.
 
 ### Save annotated video
 
 ```bash
 ./cpp/build/adas_cpp \
-    --video test4_720p30.mp4 --mode lane --no-display \
-    --save-video outputs/cpp_lane_test4.mp4
+    --video video_test3.mp4 \
+    --mode full \
+    --no-display \
+    --save-video outputs/cpp_full_video_test3.mp4
 ```
 
-## Validation — Python vs C++ parity on the same video
+Saving video forces `--display-every-n 1` so every rendered packet is written.
 
-The acceptance test for milestone 1 is **side-by-side replay parity** on
-a deterministic video. We don't need bit-exact equality (HailoRT and
-OpenCV resize at the C++/Python boundary aren't bit-exact); we need
-visually identical lane geometry and steering within a small tolerance.
-
-### A. Generate annotated outputs from both runtimes
+### Profiling and evaluation logs
 
 ```bash
-# Python reference (existing official command, swap --camera for --video):
-.\.venv\Scripts\python.exe .\src\main.py \
-    --config config/stdc1_lane_hailo.yaml --mode lane --onnx \
-    --video test4_720p30.mp4 --no-display \
-    --save-video outputs/py_lane_test4.mp4 \
-    --metrics-out outputs/py_lane_test4_metrics.jsonl
-
-# C++ runtime, same input video:
 ./cpp/build/adas_cpp \
-    --video test4_720p30.mp4 --mode lane --no-display \
-    --save-video outputs/cpp_lane_test4.mp4
+    --video video_test3.mp4 \
+    --mode full \
+    --no-display \
+    --profile \
+    --profile-log-every 100 \
+    --eval-log
 ```
 
-### B. Eyeball the videos side by side
+`--profile` records per-stage EMA/max timing. `--eval-log` prints frame
+counts, average FPS, queue drops, stale fusion packets, and GPS statistics at
+shutdown.
 
-Use any media player to overlay or alt-tab between
-`outputs/py_lane_test4.mp4` and `outputs/cpp_lane_test4.mp4`. Look for:
+## Perception and control behavior
 
-- **Lane area fill**: same vertical extent and width per row, no
-  obvious lateral shift, no extra phantom rows.
-- **Red centerline**: same direction of curvature each frame, anchor at
-  roughly the same bottom-screen x.
-- **Yellow corridor**: parallel to red center, same half-width
-  envelope.
+### Lane and steering
 
-### C. Quantitative parity (lane area IoU + steering RMSE)
+STDC1 receives a stretch-resized `640x640` RGB `uint8` frame. Its four-class
+output is decoded into:
 
-There's a helper script (Python; lives at the repo root because it
-drives both runtimes) at `scripts/compare_lane_cpp_vs_py.py`. It:
+- `lane_area`: drivable lane mask.
+- `line_union`: dotted and solid lane-marking mask.
 
-1. extracts per-frame `lane_area` masks from the Python metrics JSONL
-   and from a parallel JSONL emitted by C++ via `--metrics-out`
-   (TODO: add `--metrics-out` to `cpp/src/cli.cpp` once Python parity
-   is the active blocker — currently the comparison runs from the
-   saved videos via OpenCV).
-2. computes per-frame IoU and mean lateral error of the fitted
-   centerline.
-3. reports the median IoU and 95th-percentile lateral error.
+The parity tracker fits left/right boundaries, applies temporal EMA, and can
+hold a missing side for up to eight lane packets. It then builds:
 
-**Pass criteria for milestone 1:**
+- A red, camera-anchored center path.
+- A yellow display/drive corridor.
+- A narrower strict lane gate used to select the FCWS front vehicle.
 
-| Metric                       | Target                      |
-|------------------------------|-----------------------------|
-| Lane-area IoU (median frame) | ≥ 0.85 vs Python ONNX path  |
-| Lane-area IoU (5th pct)      | ≥ 0.70                      |
-| Steering RMSE (per frame)    | ≤ 0.10 normalised units     |
-| Frame rate, headless, Pi 5   | ≥ Python `--perf` baseline  |
+Steering is normalized to `[-1, 1]`. Positive values steer right. It is based
+on the red path's shape between the near point and lookahead point, not merely
+the path's absolute image offset.
 
-If we land below these the most likely cause is the simple per-row
-centroid + quadratic fit in `lane_geometry.cpp` diverging from the
-boundary-tracker + ego-anchored path used by the Python reference. The
-C++ overlay is intentionally simpler in this milestone; full parity
-needs the purple-boundary tracker + ego-anchored path which are not
-yet ported.
+If dynamic geometry cannot be resolved, the UI receives a fixed straight
+guidance template with confidence `0`. That fallback remains visible but is
+not treated as a valid lane lock by the safety layer.
 
-## Implementation contract
+### Object detection and distance
 
-What is **fully implemented** and considered correct for milestone 1:
+YOLO26 recognizes:
 
-1. CMake build with `find_package(OpenCV)` + manual HailoRT discovery.
-2. Capture via OpenCV+GStreamer for both CSI (libcamera) and video
-   files (decodebin → BGR appsink). USB fallback via V4L2.
-3. HailoRT C++ VDevice owner with per-model `InferVStreams` pipelines.
-   Per-model `std::mutex` around
-   `infer()` mirrors the Python backend's per-model lock.
-4. STDC1 lane preprocess: stretch resize to 640×640, RGB uint8 (no
-   `/255` on device — matches `preprocess_lane_semantic`).
-5. STDC1 decode: per-pixel argmax on NHWC or NCHW logits, nearest-
-   neighbor resize to source size, lane_area + line_union masks.
-6. Quadratic centerline fit by row centroids in the lower 55% of the
-   frame, with weighted normal-equations solve.
-7. Basic overlay: translucent lane area, red centerline polyline,
-   yellow corridor edges, optional dotted/solid line markings, HUD.
-8. YOLO26 preprocess + raw-head decode for the 6-tensor Hailo output,
-   with class sigmoid, box decode, confidence threshold, and top-k.
-9. Threaded runtime: capture → lane/object → fusion/render. Each edge is a
-   drop-oldest `LatestQueue`, identical semantics to
-   `src/pipeline/latest_queue.py`.
-10. CLI flags listed in `--help`; `--dry-run [N]` runs headless and
-   exits, useful as a smoke test.
+```text
+bus, car, motorcycle, truck,
+speed_limit_50, speed_limit_60, speed_limit_70, speed_limit_80
+```
 
-What is **explicitly TODO** or still partial:
+Vehicles are associated between consecutive object frames using same-class
+IoU matching. Distance combines:
 
-1. ByteTracker port from `src/features/object_tracker.py`; current tracker
-   is identity-only and keeps `track_id=-1`.
-2. Full behavior ladder/smoother from `src/features/behavior_logic.py`.
-   Current behavior is Go/Observe from lane validity and Stop when a
-   `front_object` is selected.
-3. Full safety supervisor / control behavior from
-   `src/pipeline/fusion_worker.py`.
-4. RC actuator wrapper: port `src/features/control_runner.py`.
-5. Remaining lane-parity stability gates: full validate_pair logic,
-   dynamic-corridor weighting/smoothing, and exact Python metrics JSONL.
-6. `--metrics-out` flag in `cli.cpp` so the parity script can
-   diff JSONL outputs directly (instead of going through video).
+- Class-specific physical-size priors.
+- Bbox-foot ground-plane geometry.
+- A near-field guardrail.
+- Per-track confidence-adaptive temporal smoothing.
 
-## Risks and next steps
+Only vehicles whose bbox bottom-center lies inside the strict lane gate can
+become `front_object`. The nearest valid vehicle is selected by estimated
+forward distance; bbox area is the fallback when range is unavailable.
 
-- **HailoRT API drift.** This code is written against the public
-  `hailo/hailort.hpp` shape (VDevice, Hef, InferVStreams). If the
-  installed `hailo-all` version on the target Pi exposes only the
-  newer Async `InferModel` API, `cpp/src/hailo_inference.cpp` needs
-  a small rewrite. Easy to spot at compile time.
-- **`libcamerasrc` element naming** can vary by libcamera package
-  version (sometimes `libcamerasrc`, sometimes `v4l2src` with a
-  `/dev/video*` bridge). If the CSI pipeline fails on a given Pi
-  install, try `--camera usb` against the libcamera-V4L2 shim.
-- **Lane parity gap.** The purple/ego-anchored chain is present, but
-  some Python stability gates and dynamic-corridor weighting are still
-  approximated. Expect the largest differences during one-sided or
-  partial lane detections.
-- **No multiprocess render.** The Python Stage A `--mp-render`
-  pattern is not needed here — the C++ runtime is GIL-free, so
-  the threaded model is enough for milestone 1.
+Distance calibration can be changed without rebuilding:
 
-## Rollback
+```text
+ADAS_CALIB_FOOT_Y
+ADAS_CALIB_Z_M
+ADAS_CAMERA_TO_BUMPER_M
+ADAS_DISTANCE_SCALE
+ADAS_DISTANCE_OFFSET_M
+```
 
-Nothing to roll back: this whole tree is new and does not modify the
-Python runtime. To stop using it, just don't build / don't run
-`adas_cpp`. The Python pipeline behaves exactly as before.
+### Following controller
+
+The selected in-lane `front_object` controls longitudinal throttle:
+
+| Condition | Result |
+|---|---|
+| Display distance `<= 3 m` | Immediate STOP, throttle `0` |
+| Between `3 m` and caution distance | CAUTION, linear throttle ramp |
+| Beyond caution distance | MONITOR, cruise throttle |
+| Front object without usable distance | Conservative throttle `0.5` |
+| No front object | Base GO throttle, still subject to the sign ceiling |
+
+The caution distance is:
+
+- `10 m` when GPS is unavailable or ego speed is at most `40 km/h`.
+- `15 m` when valid GPS ego speed is above `40 km/h`.
+
+Throttle changes are slew-limited, except an immediate hard stop.
+
+Speed-limit detections set a maximum throttle:
+
+```text
+50 km/h -> 0.60
+60 km/h -> 0.80
+70 km/h -> 0.80
+80 km/h -> 1.00
+```
+
+Before seeing a sign, the default ceiling is `0.80`/60 km/h. A detected sign
+is adopted immediately and held until a different speed-limit sign is seen.
+
+Relative speed, estimated front-vehicle speed, and TTC are display/log data.
+The current motor controller is distance-based; TTC does not command throttle.
+
+## Safety terminology and behavior
+
+### Packet
+
+A packet is a typed result passed between pipeline stages, such as
+`FramePacket`, `LanePacket`, `ObjectPacket`, or `BehaviorPacket`. A packet is
+not guaranteed to correspond to every camera frame because capacity-one
+queues may drop old data.
+
+### Stale
+
+Stale means data is too old to be safely paired with the current result. For
+example, an object packet more than eight frame IDs behind the lane packet is
+not fused.
+
+### SafetyGovernor
+
+`SafetyGovernor` is the final software supervisor before RC commands:
+
+- STOP engages immediately and remains held for five subsequent non-STOP
+  behavior packets.
+- CAUTION is held for three subsequent non-CAUTION packets.
+- Invalid lane geometry is tolerated for eight packets.
+- Lane loss alone does not stop the motor. After the grace period it becomes
+  unsafe only when a selected front object is within `4 m`.
+- More than ten consecutive behavior packets without fresh object data sets
+  `safe=false`.
+- Any `safe=false` result forces throttle to `0`.
+
+These values count processed behavior packets, not wall-clock time.
+
+### RC watchdog
+
+`RcActuator::command()` only stores the latest desired command. A separate
+50 Hz watchdog thread performs GPIO/PWM writes.
+
+If no new command arrives for `0.5 s`, or if `safe=false`, the watchdog sets
+motor PWM to zero. On shutdown it also centers the servo and drops both
+BTS7960 enable pins.
+
+The actuator is forward-only:
+
+```text
+servo        GPIO13
+BTS7960 RPWM GPIO18
+BTS7960 LPWM GPIO23, always LOW
+BTS7960 R_EN GPIO27
+BTS7960 L_EN GPIO22
+```
+
+## Validation
+
+Minimum validation after a code change:
+
+1. Build the C++ executable.
+2. Run `--help` and confirm the documented CLI flags.
+3. Run a video `--dry-run` on the Pi with both HEFs loaded.
+4. Replay with the live overlay visible and inspect lane, object selection,
+   distance, FCWS, steering, and throttle.
+5. Before connecting the motor driver, repeat with `--rc-log-only`.
+6. Run the official live CSI command with the display enabled for product
+   acceptance.
+
+Headless FPS alone is diagnostic evidence, not acceptance of the operator
+pipeline.
+
+## Known limitations and risks
+
+- The C++ tracker is greedy previous-frame IoU association, not ByteTrack.
+- Lane-area weighting and some Python stability gates remain approximated.
+- Monocular distance depends strongly on camera height, field of view, pitch,
+  bumper offset, and bbox-foot quality. Calibrate it on the installed camera.
+- `--loop-video` rewinds capture without resetting all temporal trackers and
+  controllers; state may carry across the replay boundary.
+- Speed-limit state is held indefinitely until another sign is detected.
+- The RC backend uses Linux sysfs PWM/GPIO and is pinned to
+  `/sys/class/pwm/pwmchip0`; verify the target Pi mapping before hardware use.
+- HailoRT C++ API differences between package versions may require wrapper
+  changes at compile time.
+- There are currently no automated C++ unit/integration tests.
+
+## Layout
+
+```text
+cpp/
+|-- CMakeLists.txt
+|-- README.md
+|-- include/adas/
+|   |-- runtime.hpp
+|   |-- types.hpp
+|   |-- latest_queue.hpp
+|   |-- hailo_inference.hpp
+|   |-- lane_decode.hpp
+|   |-- lane_parity.hpp
+|   |-- lane_parity_render.hpp
+|   |-- object_detection.hpp
+|   |-- object_distance.hpp
+|   |-- behavior.hpp
+|   |-- gps.hpp
+|   `-- rc_actuator.hpp
+`-- src/
+    |-- main.cpp
+    |-- runtime.cpp
+    |-- lane_*.cpp
+    |-- object_*.cpp
+    |-- fusion.cpp
+    |-- behavior.cpp
+    |-- overlay.cpp
+    |-- gps.cpp
+    `-- rc_actuator.cpp
+```

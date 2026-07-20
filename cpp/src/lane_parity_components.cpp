@@ -24,7 +24,7 @@ namespace adas {
 
 namespace lane_parity {
 
-constexpr int kBoundaryDownsample = 2;  // matches _BOUNDARY_DS in Python.
+constexpr int kBoundaryDownsample = 2; 
 constexpr int kDefaultMinArea     = 25;
 constexpr int kDefaultMinHeight   = 18;
 constexpr float kDefaultMaxAspect = 4.0f;

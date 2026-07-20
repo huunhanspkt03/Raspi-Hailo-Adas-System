@@ -91,13 +91,58 @@ std::vector<Detection> update_tracker(std::vector<Detection> dets);
 // video/stream switch so ids/poses do not leak across a cut.
 void reset_object_tracker();
 
-// Pick the closest in-lane vehicle using LaneGeometry::strict_lane_* as the
-// object gate. Lane membership is decided by the bbox bottom-center point in
-// the inner band of the strict lane. The wider rendered corridor is
-// intentionally not a fallback for FCWS.
+// Short-window memory of only the NEAR-LANE WIDTH (and near center x) from the
+// last valid strict lane gate — NOT the full polygon. A close lead vehicle can
+// hide the purple lane lines so LaneGeometry::strict_lane_* goes empty exactly
+// when FCWS must stay conservative; remembering just the near width lets us
+// rebuild a simple near band around the CURRENT red center (preferred) instead
+// of replaying a stale lane shape. Owned by the runtime/fusion path and touched
+// only on the single fusion thread — NOT global mutable state.
+class FrontObjectNearLaneMemory {
+public:
+    // Max fused frames the remembered width stays usable after the current gate
+    // goes invalid (within the requested 10..15 window).
+    static constexpr int kMaxHeldFrames = 12;
+
+    void store(float near_width_px, float near_center_x) {
+        near_width_px_ = near_width_px;
+        near_center_x_ = near_center_x;
+        age_   = 0;
+        valid_ = true;
+    }
+    // Advance one fused frame without a valid current gate; expire past window.
+    void tick_invalid() {
+        if (!valid_) return;
+        if (++age_ > kMaxHeldFrames) valid_ = false;
+    }
+    bool  usable() const { return valid_ && near_width_px_ > 1.0f; }
+    int   age() const { return age_; }
+    float near_width_px() const { return near_width_px_; }
+    float near_center_x() const { return near_center_x_; }
+    void  reset() {
+        near_width_px_ = 0.0f; near_center_x_ = 0.0f; age_ = 0; valid_ = false;
+    }
+
+private:
+    float near_width_px_{0.0f};
+    float near_center_x_{0.0f};
+    int   age_{0};
+    bool  valid_{false};
+};
+
+// Pick the closest in-lane vehicle with a LAYERED gate:
+//   1. current strict gate   (LaneGeometry::strict_lane_*),
+//   2. near_width_memory      (remembered near lane width re-centered on the
+//      current red center; close vehicles only) when the current gate is
+//      invalid / occluded,
+//   3. fixed near-pixel ROI   (close + centered + low-in-frame vehicles only).
+// Lane membership is decided by the bbox bottom-center point. The wider rendered
+// corridor is intentionally not a fallback for FCWS. near_mem is updated every
+// call (near width/center stored from a valid current gate, aged otherwise).
 std::optional<Detection> pick_front_object(const std::vector<Detection>& dets,
                                            const LaneGeometry& lane_geom,
                                            int frame_w, int frame_h,
+                                           FrontObjectNearLaneMemory& near_mem,
                                            FrameId debug_frame_id = 0);
 // (pick_speed_object was removed: it ran the identical strict gate, so
 // fusion now assigns speed_object = front_object after one gate pass.)

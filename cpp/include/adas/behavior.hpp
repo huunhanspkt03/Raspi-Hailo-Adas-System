@@ -36,10 +36,10 @@ struct SafetyConfig {
     int stop_release_frames{5};     // consecutive non-stop frames before STOP releases
     int caution_release_frames{3};  // consecutive non-caution frames before CAUTION releases
     // Consecutive invalid-lane packets tolerated before the close-object
-    // stop arms. Sized to ride out the tracker's HELD bridging window
-    // (lane_parity kHeldFrameLimit = 8): a boundary briefly occluded by the
-    // very lead vehicle we are following must NOT read as "lane lost".
-    int lane_invalid_grace{8};
+    // stop arms. Kept short so a near lead vehicle that hides the lane/purple
+    // cues triggers fail-safe promptly while still ignoring brief single-frame
+    // geometry dropouts.
+    int lane_invalid_grace{4};
     int object_stale_grace{10};     // packets without a fresh object before unsafe
     float caution_throttle{0.8f};   // throttle cap while CAUTION is held
     float min_lane_confidence{0.25f}; // below this, lane is not safe for motor

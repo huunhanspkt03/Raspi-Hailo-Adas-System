@@ -27,6 +27,27 @@ namespace {
 constexpr int kServoPeriodNs = 20'000'000;   // 50 Hz servo frame
 constexpr int kMotorPeriodNs = 50'000;       // 20 kHz BTS7960-friendly
 
+// DIAGNOSTIC steering-response gain. Multiplies the normalized steering
+// command BEFORE it is mapped to a servo pulse, so a small control.steering
+// produces a much larger servo_us swing during bench / video testing. It is
+// intentionally strong: the effective gain is kServoSteeringGain *
+// RcConfig::steering_gain (default 5.0 * 1.30 = 6.5). The gained value is
+// STILL clamped to [-1, 1] before mapping, so servo_neutral_us /
+// servo_left_us / servo_right_us remain the hard endpoint limits. At 6.5x a
+// |control.steering| of ~0.154 already saturates the servo to a full-lock
+// endpoint, which is FINE for a bench/video visibility test but FAR too
+// aggressive for real driving — set it to 1.0f (or lower the config
+// steering_gain) and bench with --rc-log-only first.
+constexpr float kServoSteeringGain = 5.0f;
+
+// Env-gated steering trace: set ADAS_DEBUG_STEERING=1 to log control steering,
+// gains, effective (post-gain, pre-map) steering, and servo_us on every pulse
+// change. Parsed once.
+bool debug_steering() {
+    static const bool enabled = std::getenv("ADAS_DEBUG_STEERING") != nullptr;
+    return enabled;
+}
+
 #if ADAS_RC_HAS_POSIX
 bool sysfs_write(const std::string& path, const std::string& value) {
     int fd = ::open(path.c_str(), O_WRONLY);
@@ -225,13 +246,21 @@ float effective_throttle(float t, float min_drive) {
     return std::clamp(t, 0.0f, 1.0f);
 }
 
+// Apply the diagnostic + config steering gains, then clamp to [-1, 1]. The
+// clamp guarantees the mapped pulse can never exceed the configured left/right
+// endpoints no matter how strong the gains are.
+float effective_steering(float steering, const RcConfig& cfg) {
+    return std::clamp(steering * kServoSteeringGain * cfg.steering_gain,
+                      -1.0f, 1.0f);
+}
+
 int steering_to_us(float steering, const RcConfig& cfg) {
-    steering = std::clamp(steering * cfg.steering_gain, -1.0f, 1.0f);
+    const float eff = effective_steering(steering, cfg);
     const int mid = cfg.servo_neutral_us;
-    if (steering >= 0.0f) {
-        return static_cast<int>(std::lround(mid + steering * (cfg.servo_right_us - mid)));
+    if (eff >= 0.0f) {
+        return static_cast<int>(std::lround(mid + eff * (cfg.servo_right_us - mid)));
     }
-    return static_cast<int>(std::lround(mid + steering * (mid - cfg.servo_left_us)));
+    return static_cast<int>(std::lround(mid + eff * (mid - cfg.servo_left_us)));
 }
 
 }  // namespace
@@ -381,6 +410,25 @@ void RcActuator::run_watchdog() {
             }
         }
         const int us = steering_to_us(steering, cfg_);
+
+        // Diagnostic steering trace (ADAS_DEBUG_STEERING=1). Logged only on a
+        // pulse change so steady-state holding doesn't spam at 50 Hz.
+        if (debug_steering() && us != last_us) {
+            const bool saturated =
+                std::fabs(effective_steering(steering, cfg_)) >= 0.999f;
+            std::cerr << "[steer] control=" << steering
+                      << " gain=" << kServoSteeringGain
+                      << " cfg_gain=" << cfg_.steering_gain
+                      << " effective=" << effective_steering(steering, cfg_)
+                      << " servo_us=" << us
+                      << " delta_us=" << (us - cfg_.servo_neutral_us)
+                      << " (neutral=" << cfg_.servo_neutral_us
+                      << " left=" << cfg_.servo_left_us
+                      << " right=" << cfg_.servo_right_us << ")"
+                      << (saturated ? " [SATURATED]" : "")
+                      << (log_only_.load() ? " [LOG-ONLY: servo will NOT move]" : "")
+                      << "\n";
+        }
 
         // BTS7960 forward-only: LPWM stays LOW; speed is entirely set
         // by RPWM duty. Enables remain HIGH from start() until stop().

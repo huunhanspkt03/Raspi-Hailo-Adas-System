@@ -45,7 +45,8 @@ void log_selected_front(FrameId frame_id, FrameId object_frame_id,
 }
 }  // namespace
 
-BehaviorPacket fuse(const LanePacket& lane, const ObjectPacket* objects) {
+BehaviorPacket fuse(const LanePacket& lane, const ObjectPacket* objects,
+                    FrontObjectNearLaneMemory& near_mem) {
     BehaviorPacket bp;
     bp.frame_id = lane.frame_id;
     bp.timestamp = lane.timestamp;
@@ -63,6 +64,7 @@ BehaviorPacket fuse(const LanePacket& lane, const ObjectPacket* objects) {
         merged.front_object = pick_front_object(merged.detections,
                                                 lane.geometry,
                                                 frame_w, frame_h,
+                                                near_mem,
                                                 lane.frame_id);
         merged.speed_object = merged.front_object;
         log_selected_front(lane.frame_id, merged.frame_id, merged.front_object);

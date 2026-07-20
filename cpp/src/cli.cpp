@@ -46,7 +46,6 @@ void print_usage(const char* argv0) {
         "  --display-every-n <N>   Render/show every Nth output packet (default 1).\n"
         "                          Perception still runs on every queued lane frame.\n"
         "                          Ignored when --save-video is set.\n"
-        "  --fast-overlay          Cheaper overlay (skip line markings).\n"
         "  --loop-video            Restart finite video sources on EOF.\n"
         "  --object-every-n <N>    Run YOLO every Nth captured frame (default 2).\n"
         "                          Use 1 for FPS testing.\n"
@@ -172,8 +171,6 @@ int parse_cli(int argc, char** argv, RuntimeConfig* cfg, std::string* error) {
             int n = std::atoi(v);
             if (n <= 0) { if (error) *error = "--display-every-n requires N>=1"; return 1; }
             cfg->display_every_n = n;
-        } else if (eq(a, "--fast-overlay")) {
-            cfg->overlay.fast_overlay = true;
         } else if (eq(a, "--loop-video")) {
             cfg->capture.loop_video = true;
         } else if (eq(a, "--object-every-n")) {

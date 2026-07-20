@@ -51,7 +51,7 @@ constexpr int   kRedMinLaneAreaPixels = 600;
 constexpr float kRedMaxJumpFracW     = 0.10f;
 constexpr float kRoadCurveAThresh    = 5e-5f;
 
-constexpr float kRenderRoiTopFrac    = 0.45f;
+constexpr float kRenderRoiTopFrac    = 0.40f;
 constexpr float kRenderRoiBottomFrac = 0.72f;
 constexpr int   kRenderNumPoints     = 24;
 // Yellow corridor half-width as a fraction of frame width, interpolated from

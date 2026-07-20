@@ -321,13 +321,11 @@ void Runtime::lane_loop() {
             ScopedStage st(stage_timer_, "preprocess_lane");
             preprocess_lane_semantic(f.frame, kStdc1InputSize, &rgb);
         }
-
         bool ok;
         {
             ScopedStage st(stage_timer_, "infer_lane");
             ok = infer_->infer("lane_segmentation", rgb, &raw);
         }
-
         LaneDecodeResult decoded;
         bool decode_ok;
         {
@@ -348,8 +346,23 @@ void Runtime::lane_loop() {
                     parity_tracker_,
                     decoded.lane_area, decoded.line_union);
             }
-            lp.steering = compute_steering(lp.geometry, f.frame_w, f.frame_h);
+            // Raw lookahead steering, then temporal stabilization so the servo
+            // follows the same smoothed signal as the rendered red path (the
+            // parity tracker already smooths the displayed centerline). Hold the
+            // last valid command when the lane is unstable / fixed-guidance
+            // fallback (geometry.valid==false -> 0 points -> hold).
+            const float raw_steer =
+                compute_steering(lp.geometry, f.frame_w, f.frame_h);
+            const int valid_pts = lp.geometry.valid
+                ? static_cast<int>(lp.geometry.fitted_pts_img.size()) : 0;
+            lp.steering = steering_stabilizer_.update(
+                raw_steer, valid_pts, lp.geometry.confidence);
+        } else {
+            // Full decode failure has no geometry to update from; keep the
+            // last stabilized command instead of snapping the servo to neutral.
+            lp.steering = steering_stabilizer_.value();
         }
+        lane_processed_.fetch_add(1, std::memory_order_relaxed);
         // Fusion: pair the lane packet with the most recent object packet
         // whose frame_id <= lp.frame_id within kStaleFrameTolerance. The
         // cached packet is shared by refcount; fuse() makes the single
@@ -367,10 +380,9 @@ void Runtime::lane_loop() {
                 // (not warmup, which is latest == null) — count for --eval-log.
                 fusion_stale_.fetch_add(1, std::memory_order_relaxed);
             }
-            bp = fuse(lp, obj_pair);
+            bp = fuse(lp, obj_pair, front_near_lane_mem_);
         }
         render_q_.put(std::move(bp));
-        lane_processed_.fetch_add(1, std::memory_order_relaxed);
         stage_timer_.frame_end();  // frame counter = lane-processed frames
     }
 }
