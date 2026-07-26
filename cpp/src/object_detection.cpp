@@ -71,6 +71,21 @@ inline float sigmoid(float x) {
     return 1.0f / (1.0f + std::exp(-x));
 }
 
+float iou_xyxy(const cv::Vec4f& a, const cv::Vec4f& b) {
+    const float x1 = std::max(a[0], b[0]);
+    const float y1 = std::max(a[1], b[1]);
+    const float x2 = std::min(a[2], b[2]);
+    const float y2 = std::min(a[3], b[3]);
+    const float iw = x2 - x1;
+    const float ih = y2 - y1;
+    if (iw <= 0.0f || ih <= 0.0f) return 0.0f;
+    const float inter = iw * ih;
+    const float area_a = std::max(0.0f, a[2] - a[0]) * std::max(0.0f, a[3] - a[1]);
+    const float area_b = std::max(0.0f, b[2] - b[0]) * std::max(0.0f, b[3] - b[1]);
+    const float uni = area_a + area_b - inter;
+    return uni > 0.0f ? inter / uni : 0.0f;
+}
+
 }  // namespace
 
 const char* yolo26_class_name(int class_id) {
@@ -238,6 +253,27 @@ std::vector<Detection> decode_yolo26(const InferOutputs& raw,
     std::partial_sort(idx.begin(), idx.begin() + keep_n, idx.end(),
         [&](int a, int b) { return all_scores[a] > all_scores[b]; });
     idx.resize(keep_n);
+
+    // Defensive class-aware NMS. YOLO26 one-to-one heads are trained for
+    // NMS-free inference, but a lightweight duplicate guard prevents rare
+    // overlapping boxes from destabilizing tracking, distance smoothing, and
+    // front-object selection. Runs on the already-small top-k set.
+    if (cfg.nms_iou_thresh > 0.0f) {
+        std::vector<int> nms_idx;
+        nms_idx.reserve(idx.size());
+        for (int k : idx) {
+            bool suppress = false;
+            for (int kept : nms_idx) {
+                if (all_classes[k] != all_classes[kept]) continue;
+                if (iou_xyxy(all_boxes[k], all_boxes[kept]) > cfg.nms_iou_thresh) {
+                    suppress = true;
+                    break;
+                }
+            }
+            if (!suppress) nms_idx.push_back(k);
+        }
+        idx.swap(nms_idx);
+    }
 
     const LetterboxParams lp = letterbox_params(frame_w, frame_h, cfg.yolo_input_size);
     const float inv_scale = 1.0f / lp.scale;
