@@ -1,0 +1,5 @@
+[Error] Requirement python3-tk not found.
+[Error] See full log: /mnt/d/adas-v2/Hailo_dataflow_compiler/.install_logs/hailo_installation_log_2026.04.06T00:36:17.log
+[Warning] It is recommended to have 32 GB of RAM, while this system has only 23 GB.
+[Warning] CUDNN version should be 9 or higher, found ..
+[Info] No response - exitting.

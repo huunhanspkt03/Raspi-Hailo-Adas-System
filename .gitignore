@@ -91,6 +91,10 @@ Hailo_dataflow_compiler/
 *.npz
 *.whl
 
+# Explicitly version the Hailo Dataflow Compiler installer bundle.
+!Hailo_dataflow_compiler/
+!Hailo_dataflow_compiler/**
+
 # Replay videos and generated archives
 *.mp4
 *.avi
