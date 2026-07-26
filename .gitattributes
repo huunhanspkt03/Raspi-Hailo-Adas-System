@@ -24,3 +24,6 @@ CMakeLists.txt text eol=lf
 *.npy binary
 *.npz binary
 *.zip binary
+
+Hailo_dataflow_compiler/*.whl filter=lfs diff=lfs merge=lfs -text
+Hailo_dataflow_compiler/*.deb binary
