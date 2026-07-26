@@ -6,8 +6,9 @@
 //   src/features/detection_filters.py  (CLASS_ID_TO_NAME, leading-vehicle)
 //
 // Hailo HEF output: 3 box heads + 3 class heads (NHWC float32 after the
-// FLOAT32-output vstream params). One-to-one heads are NMS-free; we
-// take per-anchor argmax over classes, threshold, sort, and top-k.
+// FLOAT32-output vstream params). The one-to-one heads are designed for
+// NMS-free inference, but the runtime still applies a small class-aware NMS
+// guard after top-k to suppress duplicate boxes before tracking/distance.
 //
 // Letterbox preprocess matches pipeline.preprocessor.preprocess_yolo26
 // (640x640 RGB uint8, pad value 114). Boxes are scaled back from model
@@ -58,6 +59,7 @@ float yolo26_speed_limit_throttle_cap(int class_id);
 
 struct ObjectDecodeConfig {
     float conf_thresh{0.50f};
+    float nms_iou_thresh{0.60f};  // <=0 disables duplicate suppression
     int   yolo_input_size{kYolo26InputSize};
     int   pad_value{kYolo26PadValue};
     int   max_det{kYolo26MaxDet};
