@@ -1,0 +1,91 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1160" height="430" viewBox="0 0 1160 430" role="img" aria-labelledby="title desc">
+  <title id="title">Raspberry Pi and Hailo ADAS Architecture</title>
+  <desc id="desc">Clean pastel architecture diagram for the ADAS runtime. Input is captured, processed by Hailo-8 perception, fused into behavior logic, then rendered to the UI and optional RC vehicle control.</desc>
+
+  <defs>
+    <filter id="shadow" x="-8%" y="-10%" width="120%" height="125%">
+      <feDropShadow dx="5" dy="7" stdDeviation="4" flood-color="#1f2937" flood-opacity="0.18"/>
+    </filter>
+    <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#0ea5e9"/>
+    </marker>
+    <marker id="arrowDown" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M0 0 L10 5 L0 10 Z" fill="#f97316"/>
+    </marker>
+    <style>
+      .title-bg { fill: #111827; opacity: 0.94; }
+      .title { fill: #ffffff; font: 700 34px "Trebuchet MS", Arial, sans-serif; letter-spacing: 1.2px; }
+      .card { stroke: #30343f; stroke-width: 2.4; filter: url(#shadow); }
+      .card-title { fill: #171717; font: 700 18px "Trebuchet MS", Arial, sans-serif; }
+      .card-text { fill: #1f2937; font: 700 12.5px Arial, sans-serif; }
+      .small-title { fill: #171717; font: 700 14px Arial, sans-serif; }
+      .small-text { fill: #1f2937; font: 700 11px Arial, sans-serif; }
+      .arrow { stroke: #0ea5e9; stroke-width: 4; stroke-dasharray: 8 8; stroke-linecap: round; fill: none; marker-end: url(#arrow); }
+      .arrow-down { stroke: #f97316; stroke-width: 4; stroke-dasharray: 8 8; stroke-linecap: round; fill: none; marker-end: url(#arrowDown); }
+      .input { fill: #b7dccb; }
+      .capture { fill: #bca8c9; }
+      .hailo { fill: #b8c6e3; }
+      .fusion { fill: #7f8bac; }
+      .output { fill: #9881c6; }
+      .lane { fill: #dcfce7; stroke: #16a34a; stroke-width: 1.8; }
+      .object { fill: #ffedd5; stroke: #ea580c; stroke-width: 1.8; }
+      .pill { fill: #ffffff; stroke: #d0d5dd; stroke-width: 1.2; }
+      .pill-text { fill: #111827; font: 700 12px Arial, sans-serif; }
+      .icon { stroke: #374151; stroke-width: 2; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect class="title-bg" x="388" y="24" width="384" height="50" rx="25"/>
+  <text class="title" x="580" y="59" text-anchor="middle">ADAS Runtime</text>
+
+  <rect class="card input" x="42" y="160" width="145" height="104" rx="20"/>
+  <text class="card-title" x="114.5" y="190" text-anchor="middle">Input Feed</text>
+  <g transform="translate(75 202)">
+    <rect x="0" y="16" width="32" height="23" rx="4" fill="#f4c66a" stroke="#b7791f" stroke-width="1.7"/>
+    <path d="M5 16 L10 8 H23 L29 16" fill="#ffd98a" stroke="#b7791f" stroke-width="1.7"/>
+    <rect x="55" y="12" width="34" height="28" rx="5" fill="#dbeafe" stroke="#374151" stroke-width="2"/>
+    <circle cx="72" cy="26" r="7" fill="#60a5fa" stroke="#374151" stroke-width="1.5"/>
+  </g>
+  <text class="card-text" x="114.5" y="250" text-anchor="middle">camera / video</text>
+
+  <rect class="card capture" x="235" y="160" width="145" height="104" rx="20"/>
+  <text class="card-title" x="307.5" y="190" text-anchor="middle">Capture</text>
+  <g transform="translate(280 205)">
+    <rect x="0" y="0" width="55" height="35" rx="7" fill="#ffffff" stroke="#374151" stroke-width="2"/>
+    <path d="M11 10 H37 M11 19 H45 M11 28 H30" class="icon"/>
+    <circle cx="46" cy="10" r="5" fill="#34d399" stroke="#374151" stroke-width="1.5"/>
+  </g>
+  <text class="card-text" x="307.5" y="250" text-anchor="middle">frame packets</text>
+
+  <rect class="card hailo" x="430" y="132" width="220" height="160" rx="22"/>
+  <text class="card-title" x="540" y="164" text-anchor="middle">Hailo-8 Perception</text>
+
+  <rect class="lane" x="455" y="182" width="170" height="43" rx="11"/>
+  <text class="small-title" x="540" y="200" text-anchor="middle">STDC1 Lane</text>
+  <text class="small-text" x="540" y="216" text-anchor="middle">segmentation + geometry</text>
+
+  <rect class="object" x="455" y="235" width="170" height="43" rx="11"/>
+  <text class="small-title" x="540" y="253" text-anchor="middle">YOLO26n Objects</text>
+  <text class="small-text" x="540" y="269" text-anchor="middle">detection + distance</text>
+
+  <rect class="card fusion" x="730" y="160" width="165" height="104" rx="20"/>
+  <text class="card-title" x="812.5" y="189" text-anchor="middle">Fusion</text>
+  <text class="card-text" x="812.5" y="214" text-anchor="middle">lane + latest</text>
+  <text class="card-text" x="812.5" y="233" text-anchor="middle">object packet</text>
+  <text class="card-text" x="812.5" y="252" text-anchor="middle">behavior logic</text>
+
+  <rect class="card output" x="670" y="326" width="440" height="70" rx="18"/>
+  <text class="card-title" x="890" y="353" text-anchor="middle">Outputs</text>
+  <text class="card-text" x="890" y="378" text-anchor="middle">ADAS UI / video output / optional RC vehicle control</text>
+
+  <path class="arrow" d="M187 212 H235"/>
+  <path class="arrow" d="M380 212 H430"/>
+  <path class="arrow" d="M650 212 H730"/>
+  <path class="arrow-down" d="M813 264 V326"/>
+
+  <rect class="pill" x="307" y="322" width="300" height="38" rx="19"/>
+  <text class="pill-text" x="457" y="346" text-anchor="middle">Lane every frame  |  Objects every N frames</text>
+
+  <rect x="735" y="105" width="178" height="38" rx="7" fill="#fff7ed" stroke="#f6bd75" stroke-width="2"/>
+  <text x="824" y="130" text-anchor="middle" fill="#f0a54f" font="700 19px Arial, sans-serif">FCWS / LDWS / LKAS</text>
+</svg>

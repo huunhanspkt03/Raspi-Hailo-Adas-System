@@ -47,7 +47,7 @@ The full system combines **FCWS**, **LDWS/LKAS**, GPS speed display, video repla
 | Component | Usage |
 | --- | --- |
 | Raspberry Pi 5 | Main edge runtime and camera pipeline |
-| Hailo-8L AI Accelerator | Lane segmentation and object detection inference |
+| Hailo-8 AI Accelerator | Lane segmentation and object detection inference |
 | CSI / USB Camera | Live road input |
 | U-Blox NEO-M10 GPS | Ego speed and position display |
 | Servo | Steering actuator for RC vehicle validation |
@@ -99,17 +99,9 @@ Run with the Raspberry Pi CSI camera:
 
 The runtime is a parallel full-mode C++ pipeline:
 
-```text
-Capture
-  |-- lane queue   -> STDC1 Hailo inference -> lane decode -> lane geometry
-  |-- object queue -> YOLO26 Hailo inference -> raw-head decode -> tracking -> distance
-
-Lane packet + latest object packet
-  -> fusion
-  -> behavior and follow controller
-  -> overlay / display / optional video save
-  -> optional RC actuator command
-```
+<p align="center">
+  <img src="assets/architecture-pipeline.svg" alt="ADAS runtime architecture diagram" width="820">
+</p>
 
 Lane inference runs on every captured frame. Object inference runs every `N` frames through `--object-every-n`, and fusion reuses the latest fresh object packet.
 
