@@ -1,10 +1,5 @@
 #pragma once
 
-// Basic ADAS overlay: translucent lane-area fill, red centerline, yellow
-// corridor, optional HUD. Designed to be drop-in compared to the Python
-// renderer in src/pipeline/output_renderer.py but intentionally simpler
-// for the first C++ milestone — no purple boundary tracker, no
-// ego-anchored path.
 
 #include <string>
 
@@ -18,7 +13,6 @@ struct OverlayConfig {
     bool show_hud{true};
     bool hailo_active{true};
     int  display_width{960};
-    // Python-parity operator HUD elements (src/pipeline/postprocessor.py):
     //   warning_hud  — translucent lower windshield/hood panel with zone icon +
     //                  STOP / CAUTION / MONITOR label and optional distance
     //                  for the current front object

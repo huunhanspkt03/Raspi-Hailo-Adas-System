@@ -1,9 +1,3 @@
-// Phase-1 port of:
-//   src/features/lane_boundary_components.py
-//   src/features/lane_boundary_fit.py
-//   src/features/lane_boundaries.py  (fit_lane_boundaries orchestration)
-//
-// Public entry point used by lane_parity_tracker.cpp is fit_lane_boundaries.
 
 #include "adas/lane_parity.hpp"
 #include "lane_parity_internal.hpp"
@@ -18,9 +12,6 @@
 
 namespace adas {
 
-// ---------------------------------------------------------------------------
-// Component analysis (analogue of lane_boundary_components.py)
-// ---------------------------------------------------------------------------
 
 namespace lane_parity {
 

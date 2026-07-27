@@ -1,25 +1,3 @@
-// Phase-1/2/3 port of LaneBoundaryTracker and the top-level
-// compute_lane_geometry_python_parity entry that ties:
-//   tracker_update   -> compute_red_centerline
-//                    -> resolve_lookahead_target
-//                    -> build_render_corridor (purple + ego red + yellow)
-//   tracker contract + EMA + held/lost decay  (Phase 1)
-//   per-side frame-jump validation gate       (Phase 2)
-//   PurpleWidthMemory EMA                     (Phase 2; diagnostic only —
-//                                              cross-side validate_pair
-//                                              gates remain a Phase-4 gap)
-//
-// Faithful to (Python parity):
-//   src/features/lane_boundary_tracker.py
-//   src/features/lane_boundary_tracker_contract.py
-//   src/features/lane_boundary_tracker_validate.py   (frame_jump gate only)
-//   src/features/lane_boundary_tracker_resolve.py    (PurpleWidthMemory)
-//
-// DELIBERATELY NOT PORTED (still gaps for visual parity stability):
-//   parallel-shape / strong-side-copy / opposite-memory-mismatch /
-//   weak-support / opposite-anchored gates in validate_pair.
-// These are stability-improvers rather than correctness-blockers; the
-// frame-jump gate alone catches the most common boundary jumps.
 
 #include "adas/lane_parity.hpp"
 #include "adas/lane_parity_render.hpp"
@@ -33,7 +11,7 @@
 
 namespace adas {
 
-// ---- Contract helpers (lane_boundary_tracker_contract.py) -----------------
+
 
 const char* to_string(LaneSource s) {
     switch (s) {
@@ -55,7 +33,6 @@ const char* to_string(LaneState s) {
 
 namespace lane_parity {
 
-// ---- Constants matching Python defaults -----------------------------------
 
 constexpr float kEmaAlpha           = 0.40f;
 constexpr float kAcceptConfidence   = 0.18f;
@@ -67,7 +44,7 @@ constexpr int   kRenderNumPoints    = 24;
 constexpr float kTrackerTopFrac     = 0.55f;
 constexpr int   kTrackerNumPoints   = 24;
 
-// validate config (lane_boundary_tracker_validate_config.py)
+
 constexpr float kMaxFrameJumpPx     = 80.0f;
 constexpr float kWidthMemoryAlpha   = 0.30f; // DEFAULT_WIDTH_EMA_ALPHA
 
@@ -97,7 +74,7 @@ static LaneState aggregate_state(LaneSource l, LaneSource r) {
     return LaneState::HeldPrevious;
 }
 
-// ---- Per-side state -------------------------------------------------------
+
 
 struct SideState {
     LaneCoeffs coeffs;
@@ -108,10 +85,6 @@ struct SideState {
     int   output_missing_streak{0};
 };
 
-// Per-row purple width memory. EMA-blended across BOTH-detected frames at
-// the tracker's detection ROI (top 0.55 → 1.0). Currently only kept as a
-// diagnostic — full cross-side validate_pair gates that consume it are a
-// Phase-4 gap (see file header).
 struct PurpleWidthMemory {
     std::vector<float> profile;
     int frame_h{0};
@@ -140,9 +113,6 @@ struct PurpleWidthMemory {
     void reset() { profile.clear(); frame_h = 0; }
 };
 
-// Per-side frame-jump check (lane_boundary_tracker_validate_candidate.py).
-// Compares candidate-vs-previous sampled xs at the tracker ROI grid. Returns
-// max abs delta; -1 when no previous.
 static float max_abs_delta_xs(const LaneCoeffs& cand, const LaneCoeffs& prev,
                               int frame_h) {
     if (!cand.valid || !prev.valid) return -1.0f;
@@ -314,9 +284,6 @@ BoundaryTrackResult tracker_update(LaneBoundaryTracker* t,
     return res;
 }
 
-// ---------------------------------------------------------------------------
-// Top-level Python-parity geometry: tracker → red center → render corridor
-// ---------------------------------------------------------------------------
 
 namespace {
 
@@ -443,13 +410,6 @@ LaneGeometry compute_lane_geometry_python_parity(
     if (!rc.valid) {
         const char* reason = rc.reason ? rc.reason : "render_invalid";
         log_parity_invalid(reason);
-        // Python parity: pipeline/postprocessor.py::draw_fixed_guidance
-        // keeps the operator view alive by drawing a camera-anchored
-        // straight corridor whenever the dynamic render corridor cannot
-        // be resolved. Confidence=0 marks it as fallback to behavior.
-        // Throttle the fallback log to avoid log spam at ~one line/sec.
-        // First occurrence always prints; the /60 periodic ping is
-        // suppressed under --quiet.
         static unsigned long fb = 0;
         ++fb;
         if (fb == 1 || (!g_lane_parity_quiet && (fb % 60) == 0)) {
@@ -459,8 +419,7 @@ LaneGeometry compute_lane_geometry_python_parity(
         return make_fixed_guidance_geometry(frame_h, frame_w);
     }
 
-    // Pack RenderCorridor → LaneGeometry. Polyline points are
-    // (x, y) cv::Point2f in image-space.
+
     auto build_polyline = [&](const std::vector<float>& xs) {
         std::vector<cv::Point2f> pts;
         pts.reserve(xs.size());

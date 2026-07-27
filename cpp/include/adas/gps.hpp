@@ -1,33 +1,5 @@
 #pragma once
 
-// GPS reader for U-Blox NEO-M10 (or compatible NMEA-0183 receivers) over
-// UART. Background thread reads bytes from a serial port (POSIX termios),
-// splits them into NMEA sentences, and parses the latest RMC + GGA fields
-// into a single GpsSample snapshot guarded by a mutex.
-//
-// Wiring on Raspberry Pi 5 (default port /dev/serial0):
-//   GPS TX  -> Pi GPIO15 RXD (pin 10)
-//   GPS RX  -> Pi GPIO14 TXD (pin  8)
-//   GND     -> Pi GND       (pin  6 / 9 / etc.)
-//   VCC     -> 3V3 or 5V per module spec
-// On Pi 5, enable the UART: add `enable_uart=1` to /boot/firmware/config.txt
-// and disable the serial-console getty so /dev/serial0 is free for data.
-//
-// Scope:
-//   * Disabled by default; only constructed/started when the runtime
-//     config asks for it.
-//   * Read-only: never used for steering. Surfaces speed/position for
-//     logging and future ego-speed fusion.
-//   * Non-blocking with respect to the perception pipeline: the reader
-//     thread owns its serial fd and never touches camera/Hailo/display
-//     state. Consumers read snapshots via latest().
-//   * If no fresh sample arrives within stale_timeout_s, latest() flips
-//     `valid` to false and sets `reason` accordingly.
-//
-// Build note: the implementation guards termios includes behind __linux__
-// so the Windows dev build stays green. On non-Linux the reader becomes
-// a no-op stub that always reports `valid=false, reason="unsupported_os"`.
-
 #include <atomic>
 #include <chrono>
 #include <cstdint>
@@ -41,9 +13,8 @@ struct GpsConfig {
     bool enabled{false};
     std::string port{"/dev/serial0"};
     int  baud{38400};
-    // Mark sample invalid if the parser hasn't accepted a fresh fix in
-    // this many seconds. Kept generous because NEO-M10 emits ~1 Hz and
-    // some sentences (e.g. GGA-only between RMCs) only partially refresh.
+
+    
     double stale_timeout_s{2.0};
 };
 

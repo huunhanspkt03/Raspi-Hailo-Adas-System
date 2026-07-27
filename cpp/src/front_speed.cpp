@@ -44,15 +44,6 @@ void stamp_speed(Detection& fo, float ema_mps, float cur_distance,
     fo.closing_speed_kmh    =  ema_mps * 3.6f;     // positive = closing
     fo.front_speed_valid    = false;
     fo.front_speed_kmh      = 0.0f;
-    // Time gap = distance over the SIGNED relative rate, computed in BOTH
-    // directions (display/log only — never feeds the motor). Sign convention
-    // matches closing_speed_kmh:
-    //   ema_mps > 0 (closing) -> ttc_s > 0  = seconds to collision.
-    //   ema_mps < 0 (opening) -> ttc_s < 0  = the gap is growing (no collision;
-    //                                         the negative sign marks "opening").
-    // Gated on the rate MAGNITUDE so a near-stationary lead (|rate| below the
-    // noise floor) stays invalid — there the quotient explodes. Same resolved
-    // distance the rate came from, clamped to a sane band.
     fo.ttc_valid = false;
     fo.ttc_s     = 0.0f;
     if (std::fabs(ema_mps) > kTtcMinClosingMps && cur_distance >= 0.0f) {

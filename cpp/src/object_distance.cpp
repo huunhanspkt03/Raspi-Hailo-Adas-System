@@ -22,13 +22,6 @@ struct VehiclePrior {
     float max_width_m;  // size-height cue (implausible aspect -> low conf)
 };
 
-// Mirrors _REF_PRIORS_M in features/object_localizer_priors.py for the
-// four road-vehicle labels (height + width range). EXCEPTION: the motorcycle
-// height is raised here to include the upright rider. The size-height cue
-// (z = prior_h*fy/bbox_h) otherwise reads ~30% low because 0.9 m is the
-// bare-bike height, while a moving bike+rider bbox is ~1.2-1.3 m tall. This
-// is the dominant cue beyond ~15 m where the ground cue is dropped. Python
-// prior is unchanged (audit if the two paths are ever reconciled).
 constexpr VehiclePrior kVehiclePriors[] = {
     {"bus",        3.2f, 2.2f, 2.8f},
     {"car",        1.5f, 1.55f, 2.1f},
@@ -43,9 +36,7 @@ constexpr int   kClipMarginPx = 3;
 constexpr float kGroundMinDownAngleRad = 1.0f * 3.14159265358979323846f / 180.0f;
 constexpr float kGroundMaxDepthM = 15.0f;
 constexpr float kGroundConfidence = 0.80f;
-// Ground cue stays fully trusted out to this forward depth; beyond it the foot
-// sits near the horizon where a 1 px error is several metres, so its weight
-// ramps to zero by kGroundMaxDepthM.
+
 constexpr float kGroundReliableMaxM = 8.0f;
 
 const VehiclePrior* find_prior(const std::string& label) {
@@ -56,8 +47,7 @@ const VehiclePrior* find_prior(const std::string& label) {
 }
 
 float select_foot_x(float x1, float x2, float cx) {
-    // Mirrors object_localizer_depth.select_foot_u: closest bbox-bottom
-    // point to the camera forward axis.
+
     if (x1 <= cx && cx <= x2) return cx;
     if (x2 < cx) return x2;
     return x1;
@@ -67,8 +57,7 @@ float clampf(float v, float lo, float hi) {
     return v < lo ? lo : (v > hi ? hi : v);
 }
 
-// Parse an environment variable as a float; returns NaN when unset, empty, or
-// non-numeric so the caller can leave the compiled default untouched.
+
 float read_env_float(const char* name) {
     const char* v = std::getenv(name);
     if (v == nullptr || *v == '\0') {
@@ -82,15 +71,6 @@ float read_env_float(const char* name) {
     return parsed;
 }
 
-// Bumper/edge-relative slant range for the operator UI.
-//   * Forward: subtract the longitudinal camera->bumper mount offset from z.
-//   * Lateral: the camera is centered, so the gap to the nearest vehicle
-//     EDGE is max(0, |x_m| - half_width), not the full camera-center
-//     offset |x_m|. An object straddling the body (|x_m| <= half_width)
-//     contributes no lateral term, so a centered object's display equals
-//     its bumper-relative forward distance (preserves the on-axis case).
-// Both clamps are independent: vehicle_width_m is lateral only,
-// camera_to_front_bumper_m is longitudinal only.
 float edge_relative_display(float x_m, float z, const DistanceCameraConfig& cfg) {
     const float half_w = std::max(0.0f, 0.5f * cfg.vehicle_width_m);
     const float lateral_gap = std::max(0.0f, std::fabs(x_m) - half_w);
@@ -102,23 +82,6 @@ float edge_relative_display(float x_m, float z, const DistanceCameraConfig& cfg)
             cfg.display_distance_offset_m);
 }
 
-// Calibrated ground-plane foot depth. Forward distance to the point where
-// the bbox bottom edge meets the road, from the flat-ground pinhole model:
-//   ray_down = atan2(foot_y - cy, fy) + pitch_down
-//   z        = camera_height / tan(ray_down)
-// This is INDEPENDENT of the object's real-world height, so unlike the
-// size-height estimate it scales correctly with distance — a far vehicle
-// whose bbox is a few px too tall does not collapse the estimate. Valid
-// only when the foot sits below the horizon by a usable margin
-// (kGroundMinDownAngleRad) and the recovered depth is within the range
-// where pitch/foot-pixel noise stays bounded (<= kGroundMaxDepthM). The
-// caller must additionally reject clipped feet (bbox bottom at the frame
-// edge / occluded by the hood), where foot_y is meaningless.
-// pitch_down_rad is the effective downward tilt of the optical axis (the
-// caller supplies either the configured pitch or the value derived from the
-// single-point calibration); ray_down_deg/out_z are echoed for the debug
-// trace. ray_down is reported via *out_ray_down_rad even on a soft reject so
-// the trace can show why a foot was discarded.
 bool ground_plane_z(float foot_y, float fy, float cy, float pitch_down_rad,
                     float camera_height_m, float* out_z,
                     float* out_ray_down_rad) {
@@ -164,17 +127,6 @@ struct DepthResult {
     float ray_down_rad;   // 0 when the ground cue was not attempted
 };
 
-// Multi-cue forward-depth fusion. Two complementary monocular cues plus a
-// near-field guardrail, each with a physically-motivated confidence; fused in
-// inverse-depth space so neither cue's failure mode dominates:
-//   * size-height  (z = prior_h*fy/bbox_h): fails for partial/angled/rider
-//     boxes. Down-weighted when clipped, for motorcycles, and when the implied
-//     real-world width is outside the class range (aspect guardrail).
-//   * ground-plane (z from bbox foot): fails when the bbox bottom is not the
-//     true tire contact (hood occlusion / box above the wheel). Disabled when
-//     clipped; down-weighted for far feet near the horizon.
-// On large cue disagreement the fused confidence is reduced so the behavior
-// stop gate stays cautious. Returns false when neither cue is usable.
 bool fuse_depth_cues(const VehiclePrior& prior, const std::string& label,
                      float bbox_w, float bbox_h, float fx, float fy, float cy,
                      float foot_y, bool clipped, float bottom_ratio,
@@ -258,8 +210,7 @@ bool fuse_depth_cues(const VehiclePrior& prior, const std::string& label,
     return true;
 }
 
-// Per-track temporal pose state, persisted across frames. Single-threaded
-// (object worker thread only); cleared by reset_distance_smoother().
+
 PoseSmoother g_pose_smoother;
 
 }  // namespace
@@ -393,8 +344,6 @@ void annotate_distances(std::vector<Detection>& dets,
         const float bottom_ratio =
             y2 / static_cast<float>(std::max(frame_h, 1));
 
-        // Multi-cue forward-depth fusion (size-height + ground-plane foot +
-        // near-field cap), each confidence-weighted; see fuse_depth_cues.
         DepthResult dr;
         if (!fuse_depth_cues(*prior, d.label, bbox_w, bbox_h, fx, fy, cy, y2,
                              clipped, bottom_ratio, pitch_down_eff,
@@ -403,14 +352,8 @@ void annotate_distances(std::vector<Detection>& dets,
         }
 
         float z = dr.z;
-        // x_m: lateral offset of the foot column at this depth (camera optical
-        // axis). z_m/x_m/bearing stay camera-relative; only display maps to
-        // the vehicle edge via edge_relative_display.
         float x_m = ((foot_x - cx) / std::max(fx, 1e-3f)) * z;
         float confidence = dr.confidence;
-        // Per-track temporal smoothing — confidence-adaptive EMA with a depth
-        // step limiter (object_localizer_smooth.smooth_pose). No-op until the
-        // tracker assigns a track_id, so it never harms the untracked case.
         g_pose_smoother.smooth(d.track_id, &z, &x_m, &confidence);
         if (d.track_id >= 0) seen_ids.push_back(d.track_id);
 
