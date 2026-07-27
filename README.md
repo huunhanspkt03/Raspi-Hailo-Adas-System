@@ -150,13 +150,7 @@ requirements.txt     Python-side training/export/reference dependencies
 
 ### Replay Output
 
-<p align="center">
-  <video src="Outputs/Video%20Result.mp4" controls width="780">
-    <a href="Outputs/Video%20Result.mp4">Watch the replay output video</a>
-  </video>
-</p>
-
-> Note: the embedded player works only if `Outputs/Video Result.mp4` is committed or replaced with a GitHub-hosted release/demo asset URL.
+https://github.com/user-attachments/assets/6230517f-72e6-4575-bbe3-29bc195e3539
 
 ### Forward Collision Warning System
 
