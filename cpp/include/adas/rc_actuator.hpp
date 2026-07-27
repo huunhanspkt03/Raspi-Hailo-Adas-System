@@ -10,31 +10,7 @@
 //   * BTS7960 R_EN  (enable)    : GPIO27  (pin 13)  — digital HIGH while armed
 //   * BTS7960 L_EN  (enable)    : GPIO22  (pin 15)  — digital HIGH while armed
 //
-// This matches the ESP32 reference wiring: PWM only on RPWM, LPWM held LOW
-// for forward-only travel, and BOTH enable pins held HIGH while armed.
-// Reverse is unsupported by design — LPWM is never driven; negative throttle
-// is clamped to zero.
-//
-// Power/ground:
-//   * Servo and motor draw from their own supplies. Pi, servo supply,
-//     BTS7960 logic (VCC = 3.3 V or 5 V per board variant), and motor
-//     supply MUST share GND with the Pi.
-//
-// Backend:
-//   * Linux: sysfs PWM (/sys/class/pwm/pwmchip0) + sysfs GPIO
-//     (/sys/class/gpio). Pins must be PWM-capable header pins:
-//     GPIO12/13/18/19. On Pi 5/RP1 these map to PWM channels 0/1/2/3.
-//   * Non-Linux dev builds compile, but the backend is forced to
-//     log-only (no hardware writes).
-//   * --rc-log-only also forces log-only at runtime so a Pi can be
-//     dry-run safely while wiring is verified.
-//
-// Isolation:
-//   * command() is non-blocking — it stores the desired state under a
-//     mutex and returns. A dedicated watchdog thread does all sysfs
-//     writes, so camera/Hailo/render loops are never delayed by I/O.
-//   * If no fresh command arrives within command_timeout_s, the
-//     watchdog stops the motor regardless of the last command.
+
 
 #include <atomic>
 #include <chrono>

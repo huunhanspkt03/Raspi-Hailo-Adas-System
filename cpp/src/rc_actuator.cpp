@@ -27,17 +27,6 @@ namespace {
 constexpr int kServoPeriodNs = 20'000'000;   // 50 Hz servo frame
 constexpr int kMotorPeriodNs = 50'000;       // 20 kHz BTS7960-friendly
 
-// DIAGNOSTIC steering-response gain. Multiplies the normalized steering
-// command BEFORE it is mapped to a servo pulse, so a small control.steering
-// produces a much larger servo_us swing during bench / video testing. It is
-// intentionally strong: the effective gain is kServoSteeringGain *
-// RcConfig::steering_gain (default 5.0 * 1.30 = 6.5). The gained value is
-// STILL clamped to [-1, 1] before mapping, so servo_neutral_us /
-// servo_left_us / servo_right_us remain the hard endpoint limits. At 6.5x a
-// |control.steering| of ~0.154 already saturates the servo to a full-lock
-// endpoint, which is FINE for a bench/video visibility test but FAR too
-// aggressive for real driving — set it to 1.0f (or lower the config
-// steering_gain) and bench with --rc-log-only first.
 constexpr float kServoSteeringGain = 5.0f;
 
 // Env-gated steering trace: set ADAS_DEBUG_STEERING=1 to log control steering,
@@ -322,9 +311,7 @@ bool RcActuator::start(const RcConfig& cfg) {
               << " timeout=" << cfg_.command_timeout_s << "s\n";
 
     apply_safe_state();
-    // BTS7960 requires both enables HIGH for the bridge to source/sink
-    // current. Drive them HIGH once at arm; safe-state still de-energises
-    // the motor by holding RPWM duty = 0 and LPWM LOW.
+
     write_enables(true);
     stop_.store(false);
     enabled_.store(true);
@@ -337,9 +324,7 @@ void RcActuator::stop() {
     stop_.store(true);
     if (thread_.joinable()) thread_.join();
     apply_safe_state();
-    // Drop both enables LOW so the bridge is positively de-energised
-    // before fds close. RPWM duty is already 0 and LPWM is already LOW
-    // via apply_safe_state(), so this is belt-and-braces.
+
     write_enables(false);
 #if ADAS_RC_HAS_POSIX
     close_fds();
@@ -363,10 +348,7 @@ void RcActuator::run_watchdog() {
     std::string last_reason;
 
     while (!stop_.load()) {
-        // 20 ms tick (50 Hz, one servo frame): the old 100 ms tick meant the
-        // freshest steering/throttle command could sit up to 100 ms before
-        // reaching the wire. sysfs writes are cheap; the change-only log
-        // below keeps log-only mode readable.
+
         std::this_thread::sleep_for(std::chrono::milliseconds(20));
         if (stop_.load()) break;
 

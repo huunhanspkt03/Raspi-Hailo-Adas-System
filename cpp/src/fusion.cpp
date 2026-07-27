@@ -6,13 +6,6 @@
 #include "adas/behavior.hpp"
 #include "adas/object_detection.hpp"
 
-// Lane/object fusion for the current C++ milestone. The object branch is
-// available when YOLO is enabled; tracker and behavior policy are still
-// lightweight compared with the Python reference. The matching rule is
-//   object.frame_id <= lane.frame_id  AND  (lane.frame_id - object.frame_id)
-//                                          <= kStaleFrameTolerance
-// — see src/pipeline/fusion_worker.py::emit_fused for the reference.
-
 namespace adas {
 
 namespace {

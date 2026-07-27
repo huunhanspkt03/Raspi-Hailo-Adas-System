@@ -7,32 +7,9 @@
 #include <iostream>
 #include <sstream>
 
-// Lightweight milestone behavior policy. Python reference:
-//   src/features/behavior_logic.py     — BehaviorSmoother, decide_action
-//   src/features/behavior_runner.py    — run_behavior pipeline glue
-//   src/features/control_runner.py     — RC actuator wrapper
-//
-// TODO(adas-cpp/behavior): port front-object distance/braking ladder,
-// behavior smoother window, and release-frames hysteresis once
-// object detection is wired through.
-
 namespace adas {
 
 namespace {
-
-// Speed-limit sign throttle cap. Applied as an UPPER BOUND on the
-// behavior throttle (std::min), so it can never raise speed and never
-// overrides a STOP. The mapping is fixed in object_detection.cpp:
-//   speed_limit_50 -> 0.60    speed_limit_60 -> 0.80
-//   speed_limit_70 -> 0.80    speed_limit_80 -> 1.00
-// The cap is an additive safety layer (sign-limited speed), not a
-// replacement for STOP/CAUTION. It runs in front of SafetyGovernor so
-// the smoother / fail-closed still owns the final word; RcActuator only
-// applies its fixed [0,1] duty clamp downstream.
-// Best speed-limit sign throttle cap among detections, or 1.0 (no cap). Mapping
-// fixed in object_detection.cpp: 50->0.60 60->0.80 70->0.80 80->1.00. It can
-// only ever LOWER throttle (applied via std::min) and never overrides a STOP.
-// Reports the matched sign class / km-h for the reason string + logging.
 float speed_sign_cap(const std::optional<ObjectPacket>& objects,
                      int* sign_class_out, int* sign_kmh_out) {
     if (sign_class_out) *sign_class_out = -1;
@@ -50,10 +27,6 @@ float speed_sign_cap(const std::optional<ObjectPacket>& objects,
     return yolo26_speed_limit_throttle_cap(best->class_id);
 }
 
-// Ego-speed-tiered caution distance (m): the distance at which the throttle
-// reaches full cruise. Below it the throttle ramps down to 0 at the hard-stop
-// margin. ego > ego_fast_kmh -> caution_far_m; otherwise (incl. no GPS fix,
-// where ego speed is unknown) caution_near_m.
 float caution_distance_for(const FollowConfig& cfg, bool ego_valid,
                            float ego_kmh) {
     if (ego_valid && ego_kmh > cfg.ego_fast_kmh) return cfg.caution_far_m;
@@ -64,16 +37,8 @@ float caution_distance_for(const FollowConfig& cfg, bool ego_valid,
 
 BehaviorState decide_behavior(const std::optional<LanePacket>& lane,
                               const std::optional<ObjectPacket>& objects) {
-    // Lane validity must never gate the motor (see header) — the parameter
-    // stays in the signature for parity with the Python decide_action shape.
     (void)lane;
     BehaviorState s;
-
-    // PROVISIONAL only. When there IS an in-corridor front object, the
-    // authoritative distance-only FollowController (render loop) overrides
-    // action + throttle entirely, so the value here just needs to be a safe
-    // "slow down" default. With NO front object this is the final base the
-    // FollowController only caps by the speed-limit sign ceiling.
     if (objects && objects->front_object) {
         s.action = BehaviorAction::Caution;
         s.reason = "front_object";
@@ -129,16 +94,6 @@ void SafetyGovernor::apply(BehaviorPacket& bp, bool object_fresh) {
         if (raw != BehaviorAction::Caution) reason = "caution_hold";
     }
 
-    // --- Fail-closed supervision. ---
-    // Sustained loss of lane geometry. A short dropout is tolerated by the
-    // grace window so a single bad frame does not brake the car.
-    //
-    // VALID requires the strict lane gate + confidence only. Purple polylines
-    // are deliberately NOT required: the parity tracker leaves them empty on
-    // HELD frames (boundary briefly occluded — often by the very lead vehicle
-    // we are following), and HELD is the tracker bridging a dropout, not a
-    // lost lane. The fixed-guidance fallback still reads invalid here because
-    // it carries confidence 0 and no strict gate.
     bool lane_valid = false;
     if (bp.lane.has_value()) {
         const LaneGeometry& g = bp.lane->geometry;
@@ -208,11 +163,6 @@ void FollowController::reset() {
     sign_detected_   = false;
 }
 
-// Speed-limit sign ceiling: adopted IMMEDIATELY on detection and HELD
-// INDEFINITELY until a DIFFERENT sign is seen (it persists after the sign leaves
-// the frame). Before any sign the 60 km/h default applies. A ceiling can only
-// REDUCE throttle, so early adoption is safe. Updates held_sign_* + the source
-// flags consumed by the UI panel, the reason string, and the [motor] log.
 float FollowController::sign_ceiling(const std::optional<ObjectPacket>& objects) {
     int cls = -1, kmh = 0;
     const float seen = speed_sign_cap(objects, &cls, &kmh);  // cls < 0 -> no sign
@@ -239,9 +189,6 @@ float FollowController::slew(float target, const BehaviorPacket& bp) const {
 }
 
 void FollowController::update(BehaviorPacket& bp) {
-    // Speed-limit sign ceiling = the motor's MAX throttle. Advanced EVERY frame
-    // (incl. the early-return modes) so the hold timer stays consistent; it can
-    // only REDUCE the follow/TTC/distance result, never raise it.
     const float sign_cap = sign_ceiling(bp.objects);
     // Expose the applied ceiling to the UI (display-only); the overlay never
     // recomputes it, so the panel always matches the motor's cap.
@@ -297,14 +244,6 @@ void FollowController::update(BehaviorPacket& bp) {
         return -1.0f;
     };
 
-    // === Distance-only longitudinal control for the in-corridor front_object.
-    //   < hard_stop_distance_m (3 m)        -> STOP, unconditional (lead moving
-    //                                          or not; GPS-independent).
-    //   [3 m, caution_dist)                 -> CAUTION, throttle ramps linearly
-    //                                          0 (at 3 m) -> max cruise (at caution_dist).
-    //   >= caution_dist                     -> MONITOR, full cruise.
-    // caution_dist is ego-speed tiered: ego > 40 km/h -> 15 m, else (incl. no
-    // GPS fix) -> 10 m. No TTC / closing-rate term — pure distance (per spec).
     const char*    mode      = "no_front";
     float          raw       = bp.control.throttle;   // decide_behavior provisional
     bool           hard_stop = false;
@@ -349,13 +288,6 @@ void FollowController::update(BehaviorPacket& bp) {
         }
     }
 
-    // speed_object is a lane-relevant display/speed source only.  Do not let it
-    // reduce motor throttle: adjacent-lane motorcycles/cars can sit close to the
-    // corridor edge and otherwise make the car slow even when there is no strict
-    // in-corridor front_object.
-
-    // Speed-limit sign ceiling (final upper bound; never raises throttle). The
-    // distance-ramp result `raw` can only be reduced below it.
     const float capped = std::min(raw, sign_cap);
 
     // Asymmetric PWM slew (brake faster than accelerate); hard stop bypasses it.

@@ -206,13 +206,6 @@ std::vector<Detection> decode_yolo26(const InferOutputs& raw,
             return {};
         }
 
-        // Threshold-first on RAW logits: sigmoid is monotonic, so comparing
-        // each anchor's max class logit against logit(conf_thresh) gives the
-        // same survivor set as sigmoiding everything — but skips ~67k exp()
-        // per frame (8400 anchors x 8 classes). sigmoid runs only for the
-        // handful of survivors; the box (per-side dist softmax) is also
-        // decoded lazily for survivors only. Grouping guarantees the class
-        // head shares the box head's grid (bh==ch, bw==cw).
         const float ct = clampf(cfg.conf_thresh, 1e-4f, 1.0f - 1e-4f);
         const float logit_thresh = std::log(ct / (1.0f - ct));
         const float* cls_src = tr.cls_head->f32;
@@ -403,16 +396,6 @@ float boundary_x_at_y(const std::vector<cv::Point2f>& line, float y) {
     return (std::fabs(y - first.y) < std::fabs(y - last.y)) ? first.x : last.x;
 }
 
-// ---- Layered front-object selection helpers (file-local) ----
-//
-// Lane membership for FCWS is decided by the bbox bottom-center point against a
-// strict lane gate built from the learned purple lane width around the red
-// centerline (NOT the wider rendered drive corridor). Selection is layered so a
-// close lead vehicle that briefly occludes the lane lines is still caught.
-
-// Inner lane band on lane_lateral_frac = (cx - left_x)/lane_w: 0.0 == strict
-// LEFT boundary, 1.0 == RIGHT boundary at foot_y. The inner 30%..90% band keeps
-// a slightly off-center lead vehicle while filtering adjacent-lane vehicles.
 constexpr float kInnerLaneMinFrac = 0.30f;
 constexpr float kInnerLaneMaxFrac = 0.85f;
 
@@ -423,10 +406,6 @@ constexpr float kNearRoiMinXFrac     = 0.25f;
 constexpr float kNearRoiMaxXFrac     = 0.75f;
 constexpr float kNearRoiMinFootYFrac = 0.45f;
 
-// near_width_memory layer (layer 2): the remembered near band only ever judges
-// CLOSE vehicles, so a far adjacent-lane vehicle can never be selected through a
-// stale width. Match the fixed-ROI 6 m fail-safe so only truly near vehicles
-// can enter through this fallback.
 constexpr float kNearWidthMaxDistM   = 6.0f;
 // Sanity clamp on a remembered near-lane width, as a fraction of frame width.
 constexpr float kNearWidthMinFrac    = 0.04f;

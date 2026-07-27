@@ -1,15 +1,6 @@
 #pragma once
 
-// Per-track temporal smoothing for monocular pose estimates. Direct port of
-//   src/features/object_localizer_smooth.py::smooth_pose
-// plus the prune-to-seen-tracks step from object_localizer.localize. Keyed on
-// the detection track_id assigned by the object tracker (update_tracker). When
-// a detection has no track (track_id < 0) smoothing is a no-op, mirroring the
-// Python `if tid is None: return z, x_m, confidence`.
-//
-// State is per-track {z, x, confidence}. Each frame: smooth() every tracked
-// detection, then prune() to the ids actually seen so dropped tracks do not
-// leak. Single-threaded use only (the object worker thread).
+
 
 #include <unordered_map>
 #include <vector>

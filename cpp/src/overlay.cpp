@@ -20,12 +20,6 @@ namespace {
 void blend_mask_color(cv::Mat& bgr, const cv::Mat& mask, const cv::Scalar& color, double alpha) {
     if (mask.empty() || bgr.empty()) return;
     if (mask.rows != bgr.rows || mask.cols != bgr.cols) return;
-    // In-place full-frame blend with rounded integer alpha math. The inner
-    // loop already skips zero-mask pixels, so a bounding box would only limit
-    // which zero pixels get visited — output is identical either way. For the
-    // lane_area / line_union masks (which span most of the frame) cv::boundingRect
-    // was a wasted whole-mask scan that produced a bbox ~= the frame anyway, so
-    // blending the full frame directly is both simpler and fewer passes.
     constexpr int kAlphaScale = 10000;
     const int a = std::clamp(
         static_cast<int>(std::lround(alpha * kAlphaScale)), 0, kAlphaScale);
@@ -59,24 +53,12 @@ void draw_polyline(cv::Mat& bgr, const std::vector<cv::Point2f>& pts,
     cv::polylines(bgr, ipts, /*isClosed=*/false, color, thickness, cv::LINE_AA);
 }
 
-// --- Operator-HUD primitives ---------------------------------------------
-//
-// The live UI is draw_adas_panels (LDWS/LKAS + mini LANE + FCWS side panels);
-// draw_warning_icon (Green/Orange/Red glyph) is its shared collision icon.
-// All icons are vector-drawn with OpenCV primitives — no PNG decode, no
-// per-frame asset loading. FCWS severity is classified at draw time from the
-// front object's distance vs the ego-speed-tiered caution distance
-// (classify_fcws), mapped to the WarningZone glyph color.
-
-// WarningZone is defined in adas/warning_zone.hpp (display-severity glyph level).
 const cv::Scalar kZoneColorsBgr[3] = {
     cv::Scalar( 35, 190,  60),   // green  — MONITOR
     cv::Scalar(  0, 140, 255),   // orange — CAUTION
     cv::Scalar(  0,   0, 255),   // red    — STOP
 };
 
-// Dark translucent panel (ADAS side-panel look): a near-black fill blended in,
-// with a thin light border. ROI-restricted.
 void blend_dark_panel(cv::Mat& out, int x1, int y1, int x2, int y2,
                       double alpha) {
     cv::Rect r(x1, y1, x2 - x1, y2 - y1);
@@ -100,26 +82,6 @@ void clamp_icon_center(int w, int h, int size, int* cx, int* cy) {
 // LaneKeepDir is moved up here so the icon-cache renderers below can see
 // it without splitting the cache block across the file.
 enum class LaneKeepDir { Straight, Left, Right };
-
-// --- Cached icon sprites -------------------------------------------------
-//
-// Warning icons and lane-keep arrows are static images modulo class and
-// size, so we render each unique (kind, size, variant) once into a small
-// CV_8UC4 premultiplied-alpha canvas and reuse it for every subsequent
-// frame. OpenCV's anti-aliased primitives, when written to a CV_8UC4
-// canvas initialised to (0,0,0,0) with 4-element scalars, naturally
-// produce premultiplied output, so the composite step is just:
-//   dst[c] = src[c] + dst[c] * (255 - src_alpha) / 255
-// (Porter-Duff "over" for premultiplied src).
-//
-// The cache lives in a thread_local because render_overlay is called
-// from a single thread (Runtime::render_loop). Sprites are keyed on
-// size so the legitimately-distinct HUD-size and per-detection-size
-// requests coexist without re-rendering each frame.
-
-// Outer-stroke padding around each cached icon so AA strokes don't clip
-// at the canvas edge. Sized for the widest stroke that draw_warning_icon
-// / draw_lane_keep_arrow can produce at the sizes the runtime uses.
 constexpr int kIconCanvasPad = 8;
 
 void paste_bgra(cv::Mat& out, const cv::Mat& src_bgra,
@@ -203,11 +165,6 @@ cv::Mat render_warning_icon_bgra(WarningZone zone, int size) {
     return canvas;
 }
 
-// Smooth quadratic-bezier turn arrow, shared by the cached sprite and the
-// severity-colored panel draw. Replaces the old straight-segment L-shape whose
-// right-angle bend looked kinked ("gay/gap khuc"). The head is aligned to the
-// curve tangent so it joins the shaft seamlessly. Works on a BGR panel or a
-// premultiplied BGRA sprite canvas — pass scalars matching the channel count.
 void paint_curved_arrow(cv::Mat& canvas, cv::Point ctr, int size,
                         LaneKeepDir dir, const cv::Scalar& fill,
                         const cv::Scalar& shadow, const cv::Scalar& highlight,
@@ -278,11 +235,6 @@ void draw_curved_arrow(cv::Mat& out, int cx, int cy, int size,
                        cv::Scalar(20, 20, 20), cv::Scalar(), false);
 }
 
-// Sprites are keyed on size because render_overlay legitimately asks
-// for two warning-icon sizes per frame (the larger HUD glyph + the
-// smaller per-detection chip). A flat std::map keeps the lookup
-// allocation-free after warmup, and the runtime touches at most ~3
-// distinct sizes total per video.
 struct IconCache {
     std::map<int, std::array<cv::Mat, 3>> warning_by_size;
 
@@ -314,9 +266,6 @@ void draw_warning_icon(cv::Mat& out, WarningZone zone, int cx, int cy, int size)
                cy - sprite.rows / 2);
 }
 
-
-// FCWS panel blink cadence (used by draw_adas_panels). The blink phase is
-// derived FPS-independently from the packet timestamp.
 constexpr long long kTtcBlinkHalfMs = 250;    // 250 ms on / 250 ms off -> ~2 Hz
 
 void draw_hud(cv::Mat& bgr, const BehaviorPacket& pkt, float display_fps, bool hailo_active) {
@@ -372,12 +321,6 @@ void draw_hud(cv::Mat& bgr, const BehaviorPacket& pkt, float display_fps, bool h
     }
 }
 
-// --- FCWS risk from the CONFIGURED safe following distance ------------------
-// FCWS keys off the front object's measured distance vs the motor's caution
-// distance — NOT behavior_action and NOT the old corridor color band. The
-// caution distance is ego-speed tiered, mirroring behavior.cpp's distance
-// ladder so the warning matches where the motor begins to slow. DISPLAY ONLY —
-// reads the packet, changes no control state.
 enum class FcwsRisk { Clear, Normal, Prompt, Warning };
 
 // Caution-distance constants mirror FollowConfig (adas/behavior.hpp). Kept in
@@ -386,9 +329,6 @@ constexpr float kFcwsEgoFastKmh    = 40.0f;  // ego > this -> far caution distan
 constexpr float kFcwsCautionNearM  = 10.0f;  // ego <= 40 km/h, or GPS no fix
 constexpr float kFcwsCautionFarM   = 15.0f;  // ego > 40 km/h
 
-// Motor caution distance (m) for the front object: ego > 40 km/h -> far, else
-// (incl. no GPS fix) -> near. Mirrors behavior.cpp::caution_distance_for. No
-// stationary special-case — the motor ladder is distance-only.
 float fcws_caution_distance(const BehaviorPacket& pkt) {
     const bool ego_valid = pkt.gps.has_value() && pkt.gps->valid;
     const float ego_kmh = ego_valid ? static_cast<float>(pkt.gps->speed_kmh) : 0.0f;
@@ -470,15 +410,6 @@ void draw_speed_sign_icon(cv::Mat& out, int cx, int cy, int size, int kmh) {
                 cv::FONT_HERSHEY_SIMPLEX, fs, cv::Scalar(20, 20, 20), 2, cv::LINE_AA);
 }
 
-// ---------------------------------------------------------------------------
-// ADAS-style side panels (LDWS/LKAS, LANE, FCWS). DISPLAY ONLY — reads the
-// packet + the resolved FcwsRisk; never mutates control/perception. Every glyph
-// is an OpenCV primitive or self-drawn sprite (no 3rd-party assets). Layout
-// (tuned for 1280x720); LDWS/LKAS and FCWS share one compact height:
-//   bottom-left  : LDWS/LKAS status + smooth arrow
-//   right top    : mini lane/corridor (clean, no text)
-//   bottom-right : FCWS risk (Normal/Prompt/Warning/Clear) + distance/TTC/front
-// ---------------------------------------------------------------------------
 void draw_adas_panels(cv::Mat& out, const BehaviorPacket& pkt, FcwsRisk fcws) {
     const int W = out.cols, H = out.rows;
     const int dim = std::min(W, H);
@@ -551,11 +482,6 @@ void draw_adas_panels(cv::Mat& out, const BehaviorPacket& pkt, FcwsRisk fcws) {
         const int status_y = title_y + line_h(0.95);
         put("LDWS / LKAS", x + 12, title_y, 0.5, kAccent, 1);
 
-        // UI-only Schmitt hysteresis around the 0.10 / 0.22 |steering| thresholds
-        // so the displayed status does not flip when steer hovers at a boundary.
-        // Reads control.steering but NEVER writes it (servo command unchanged).
-        // Reset on lane loss so a stale TURN is not held.
-        //   level 0 = LANE KEEP (green), 1 = TURN (amber), 2 = departure (red).
         std::string status; cv::Scalar col;
         LaneKeepDir adir = LaneKeepDir::Straight;
         if (!lane_valid) {
@@ -599,10 +525,6 @@ void draw_adas_panels(cv::Mat& out, const BehaviorPacket& pkt, FcwsRisk fcws) {
         const int sy = ty + 10, sh = (y + ph) - sy - 12;
         const cv::Scalar yel(0, 210, 210), red(0, 0, 255);
 
-        // Mini forward-view uses ONLY the red centerline (geometry.fitted_pts_img).
-        // The two yellow guide rails are UI-only PERSPECTIVE offsets from that red
-        // path — never the corridor (left_corridor/right_corridor) or its polygon.
-        // FCWS uses the strict lane gate elsewhere; this panel reads no corridor.
         auto map_red = [&](const std::vector<cv::Point2f>& src,
                            float ymin, float ymax) {
             std::vector<cv::Point2f> dst;
@@ -739,14 +661,6 @@ void draw_adas_panels(cv::Mat& out, const BehaviorPacket& pkt, FcwsRisk fcws) {
 cv::Mat render_overlay(const BehaviorPacket& pkt, float display_fps, const OverlayConfig& cfg) {
     cv::Mat out = pkt.frame.clone();
 
-    // Forward-collision risk = strict in-corridor front_object distance vs the
-    // configured safe following distance. Lane-edge speed_object detections can
-    // still display their own labels, but they do not enter the FCWS panel.
-    // Drives BOTH the selected box/icon and the FCWS panel so they stay
-    // consistent (no behavior_action, no corridor band).
-    // UI-only sticky-to-danger smoothing: a raw Warning shows INSTANTLY; a drop
-    // to Normal/Clear (e.g. front object lost for 1-2 frames) releases only after
-    // a 5-frame majority, so the warning does not flicker. Does NOT affect motor.
     const FcwsRisk raw_fcws = classify_fcws(pkt);
     const FcwsRisk fcws_risk =
         static_cast<FcwsRisk>(g_fcws_smoother.update(static_cast<int>(raw_fcws)));
@@ -761,24 +675,8 @@ cv::Mat render_overlay(const BehaviorPacket& pkt, float display_fps, const Overl
             // Subtle line marking highlight.
             blend_mask_color(out, lp.line_union, cv::Scalar(255, 255, 0), 0.55);
         }
-        // The large on-road drive corridor (yellow edges + red centerline +
-        // collision-zone bands + anchor dot) is intentionally NOT drawn on the
-        // road anymore: it was moved into the right-top LANE panel so the scene
-        // stays clean and never occludes objects ahead. The corridor GEOMETRY
-        // is still computed (lp.geometry) and still feeds the warning-zone /
-        // front-object logic below — only its on-road rendering was removed.
-        // The green lane_area fill + line markings above remain as the
-        // perception layer. To restore the on-road corridor for debugging, draw
-        // lp.geometry.left_corridor / right_corridor / fitted_pts_img here.
     }
 
-    // Per-detection boxes. In-corridor objects get a pixel-fraction tint; the
-    // selected FCWS object additionally gets a centered, metric-distance
-    // warning icon + matching box color so it agrees with the warning HUD.
-    // Motor hard-stop still uses the stricter front_object path. Cf.
-    // src/pipeline/postprocessor.py::draw_detections — note the
-    // intentional divergence: C++ draws the metric warning icon for the front
-    // object only (centered), where Python draws a pixel-fraction icon per box.
     const int dim_for_icon = std::min(out.cols, out.rows);
     const int det_icon_size = std::clamp(
         static_cast<int>(std::lround(dim_for_icon * 0.055)), 30, 52);
@@ -797,8 +695,6 @@ cv::Mat render_overlay(const BehaviorPacket& pkt, float display_fps, const Overl
             }
             return same_detection_box(d, *front_speed);
         };
-        // Identity match of a raw detection against the selected FCWS object,
-        // without the speed-valid gate.
         auto is_fcws_object_box = [&](const Detection& d) {
             return fcws_obj != nullptr && same_detection_box(d, *fcws_obj);
         };
@@ -806,10 +702,6 @@ cv::Mat render_overlay(const BehaviorPacket& pkt, float display_fps, const Overl
             const bool is_sign = yolo26_is_traffic_sign(d.class_id);
             const float foot_x = d.bbox_img.x + d.bbox_img.width * 0.5f;
             const float foot_y = d.bbox_img.y + d.bbox_img.height;
-            // The selected FCWS object's box + icon follow the FCWS risk
-            // (distance vs configured safe distance), NOT the old corridor color
-            // band, so the box, the centered icon, and the FCWS panel all agree:
-            // within safe distance -> red + warning icon; beyond -> green.
             const bool is_front = !is_sign && is_fcws_object_box(d);
             std::optional<WarningZone> front_overlay_zone;
             if (is_front) front_overlay_zone = zone_for_fcws(fcws_risk);
@@ -823,11 +715,6 @@ cv::Mat render_overlay(const BehaviorPacket& pkt, float display_fps, const Overl
             }
             cv::rectangle(out, d.bbox_img, color, 2);
             cv::circle(out, {cvRound(foot_x), cvRound(foot_y)}, 3, color, -1, cv::LINE_AA);
-            // Warning icon: selected FCWS object only, centered inside the bbox and
-            // sized to fit so it stays within the box and clear of the
-            // top-left label/distance text. Skipped when the box is too small
-            // to contain even the 18px minimum glyph — the zone-colored box
-            // still conveys the warning without the icon spilling outside (R4).
             const int icon_fit = static_cast<int>(
                 std::min(d.bbox_img.width, d.bbox_img.height));
             if (front_overlay_zone && icon_fit >= 22) {
@@ -875,9 +762,7 @@ cv::Mat render_overlay(const BehaviorPacket& pkt, float display_fps, const Overl
     if (cfg.show_hud) {
         draw_hud(out, pkt, display_fps, cfg.hailo_active);
     }
-    // ADAS-style side panels (LDWS/LKAS bottom-left, mini LANE top-right, FCWS
-    // bottom-right). Display only; FCWS + selected object box/icon are driven
-    // by the resolved fcws_risk (= distance vs configured safe following distance).
+    
     if (cfg.show_warning_hud) {
         draw_adas_panels(out, pkt, fcws_risk);
     }

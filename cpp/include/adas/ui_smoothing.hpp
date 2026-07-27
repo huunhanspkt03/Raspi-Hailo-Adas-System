@@ -1,24 +1,9 @@
 #pragma once
 
-// UI-ONLY temporal smoothing helpers for the overlay (anti-flicker). These
-// smooth DISPLAY classifications only — they never read or write motor/control
-// state (throttle, steering, hard_stop). Header-only + single-threaded (the
-// render thread), so each consumer keeps its own instance as thread_local state.
-
 #include <array>
 #include <cmath>
 
 namespace adas::ui {
-
-// Sticky-to-danger level smoother over the last N frames. ESCALATION IS INSTANT
-// (a single higher raw level shows immediately, e.g. raw Warning -> Warning).
-// DE-ESCALATION IS SLOW: the displayed level only steps down once a MAJORITY of
-// the window no longer supports it, so a 1-2 frame dropout (front object lost
-// for a frame, or a value straddling a threshold) does NOT flicker the warning
-// away; a sustained drop releases within ~ceil(N/2) frames. Levels are ints,
-// higher = more danger. The bounded window self-limits how long a stale level
-// is held (<= ~N/2 frames), so no explicit reset is needed when the source goes
-// quiet — feed the low/Clear level and it releases on its own.
 template <int N>
 class StickyLevel {
 public:
@@ -49,11 +34,6 @@ private:
     int shown_{0};
 };
 
-// Schmitt-trigger smoother for the 3-level steer status (0=keep, 1=turn,
-// 2=depart) plus a 3-way direction (-1 left, 0 straight, +1 right). A
-// hysteresis margin keeps the displayed state from flipping when |steer| or the
-// sign hovers right at a threshold; a genuine large move still follows in one
-// frame. UI-ONLY — the caller's control.steering is never modified.
 class SteerStatus {
 public:
     // keep / depart: the |steer| thresholds (e.g. 0.10 / 0.22). margin: the

@@ -1,14 +1,4 @@
 #pragma once
-
-// Drop-oldest bounded queue used to fan capture frames into lane/object
-// workers without backlog. C++ analogue of src/pipeline/latest_queue.py.
-//
-// Semantics:
-//   - put(item) never blocks; if full, the OLDEST item is evicted and the
-//     internal dropped counter is bumped.
-//   - get(timeout) returns std::nullopt on timeout or after close().
-//   - Safe for one or many producers/consumers.
-
 #include <atomic>
 #include <chrono>
 #include <condition_variable>

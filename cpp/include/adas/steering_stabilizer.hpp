@@ -1,27 +1,5 @@
 #pragma once
 
-// Temporal stabilization for the scalar lane-follow steering command.
-//
-// WHY: the python_parity lane path already temporally smooths the *displayed*
-// red centerline inside the tracker, but the C++ runtime fed compute_steering's
-// RAW per-frame value straight to the servo (fusion.cpp: control.steering =
-// lane.steering). So the rendered path looked stable while the servo jumped on
-// every per-frame red-center wobble. This restores the smoothing chain the
-// Python single-threaded loop already runs (src/pipeline_loop.py +
-// src/features/controller.py: gate_by_confidence -> rate_limit -> smooth_value),
-// so the displayed path and the servo command come from the same stabilized
-// signal instead of disagreeing.
-//
-// Robust combination — each knob is a clearly named constant:
-//   1. Validity gate  — too few valid path points => HOLD the last command.
-//   2. Median window  — rejects single-frame outlier spikes (frame buffer).
-//   3. Confidence gate— low lane confidence => blend toward / hold previous.
-//   4. Rate limit     — bounds |Δsteer| per frame (no single-frame lurch).
-//   5. EMA            — final smoothing toward the rate-limited target.
-//
-// Single-threaded: owned by the lane worker, which calls update() once per
-// lane frame. No internal locking.
-
 #include <algorithm>
 #include <array>
 #include <cmath>

@@ -1,10 +1,5 @@
 #pragma once
 
-// Camera / video capture wrapper. Picks the right OpenCV backend based on
-// the input source (CSI GStreamer, video file, USB webcam) and exposes a
-// blocking read_frame() that returns the next BGR frame or std::nullopt on
-// EOF / fatal error.
-
 #include <cstdint>
 #include <optional>
 #include <string>
@@ -38,9 +33,6 @@ public:
     std::optional<cv::Mat> read_frame();  // BGR uint8
     bool is_exhausted() const { return exhausted_; }
     double source_fps() const;
-    // Total frame count for VideoFile sources from OpenCV metadata, or < 0
-    // when unknown (live cameras, or a GStreamer pipeline that doesn't
-    // report CAP_PROP_FRAME_COUNT). Used by --eval-log only.
     double source_total_frames() const;
 
 private:

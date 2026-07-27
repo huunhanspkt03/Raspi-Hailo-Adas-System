@@ -1,7 +1,4 @@
-// Phase-2/3 implementation of the Python parity render pipeline:
-//   red center  -> ego-anchored path  -> purple+yellow render corridor.
-//
-// See lane_parity_render.hpp for the per-module mapping back to Python.
+
 
 #include "adas/lane_parity_render.hpp"
 
@@ -39,10 +36,6 @@ const char* to_string(RoadType s) {
     return "?";
 }
 
-// ===========================================================================
-// Shared constants (matched to lane_corridor_render_constants.py)
-// ===========================================================================
-
 namespace {
 
 constexpr float kRedCenterTopFrac    = 0.55f;
@@ -67,22 +60,21 @@ constexpr float kMinInnerGapPx       = 80.0f;    // was 100; far-end floor (half
 constexpr float kMinLaneWidthPx      = 40.0f;
 constexpr int   kSmoothTaps          = 3;
 
-// Ego-anchored path defaults (ego_anchored_path.py)
+
 constexpr float kEgoLookaheadFrac     = 0.50f;
 constexpr float kEgoMaxCurvatureA     = 8e-3f;
 constexpr float kEgoMaxTopDispFracW   = 0.40f;
 constexpr float kEgoDeadbandA         = 1e-5f;
 
-// LaneAreaOnly clamps (lane_target_resolver.py)
 constexpr float kLaneAreaMaxCurvatureA   = 2e-3f;
 constexpr float kLaneAreaMaxTopDispFracW = 0.10f;
 constexpr float kLaneAreaDeadbandA       = 5e-5f;
 
-// LaneTargetState EMA params (lane_target_resolver.py)
+
 constexpr float kTargetConfHold = 0.25f;
 constexpr float kTargetEmaAlpha = 0.20f;
 
-// CorridorCurveState (lane_corridor_render_curve.py)
+
 constexpr float kCurveMaxCurvatureA   = 5e-3f;
 constexpr float kCurveDampFactor      = 0.25f;
 constexpr float kCurveEmaAlpha        = 0.25f;
@@ -184,17 +176,6 @@ bool purple_sides_separable(const std::vector<float>& lx,
 }
 
 }  // namespace
-
-// ===========================================================================
-// compute_red_centerline (red_center_from_boundaries.py)
-// ===========================================================================
-
-// Lightweight lane_area row-centroid quadratic fit. C++ analogue of
-// red_center_geom.lane_area_evidence (which itself wraps
-// features/dynamic_corridor.compute_dynamic_corridor). We approximate the
-// dynamic-corridor weighting with a uniform-weight quadratic fit over the
-// per-row lane_area centroids in the ROI; this matches Python output in
-// straight scenes.
 namespace {
 
 struct LaneAreaFitResult {
@@ -450,9 +431,6 @@ RedCenter compute_red_centerline(const cv::Mat& lane_area,
     return out;
 }
 
-// ===========================================================================
-// Lookahead target + ego-anchored path (lane_target_resolver.py, ego_anchored_path.py)
-// ===========================================================================
 
 namespace {
 
@@ -461,12 +439,6 @@ float lookahead_y_for(int frame_h, float lookahead_frac) {
     return std::clamp(fh * lookahead_frac, 0.0f, fh - 1.0f);
 }
 
-// Confidence-scaled clamps. When the source is LaneAreaOnly and the
-// lane_area is strong, allow ego-like curvature/displacement so the red
-// path can bend toward the actual lane center; otherwise stay conservative.
-// Below ~0.30 confidence we keep the original tight LaneAreaOnly clamps;
-// above ~0.70 we use the same clamps the purple-primary path uses.
-// `area_conf` is ignored for non-LaneAreaOnly sources.
 void ego_path_clamps_for_source(CenterSource s,
                                 float area_conf,
                                 float* max_curvature_a,
@@ -571,16 +543,6 @@ EgoPathResult build_ego_anchored_path(const std::vector<cv::Point2f>& target_pts
     }
     if (denom < 1e-3) { out.reason = "degenerate_denominator"; return out; }
     double a_raw = num / denom;
-    // INTENTIONAL DIVERGENCE FROM PYTHON: ego_anchored_path.py bails out
-    // and returns a=0 when |a_raw| exceeds max_curvature_a, which here
-    // collapsed the whole path back to ego_x whenever the LaneAreaOnly
-    // (tight) clamp triggered — leaving the red center vertical at frame
-    // center even on frames where lane_area clearly shows a shifted
-    // lane. We soft-cap |a| to the per-source maximum instead, so the
-    // curve bends as far as the clamp permits while still respecting
-    // the hard ceiling. Combined with the confidence-scaled LaneAreaOnly
-    // clamps in ego_path_clamps_for_source, this lets a good lane_area
-    // mask actually steer the red center.
     if (std::fabs(a_raw) > max_curvature_a) {
         a_raw = (a_raw > 0.0 ? max_curvature_a : -max_curvature_a);
         out.curvature_capped = true;
@@ -616,9 +578,7 @@ EgoPathResult build_ego_anchored_path(const std::vector<cv::Point2f>& target_pts
     return out;
 }
 
-// ===========================================================================
-// Render corridor: build_render_corridor + yellow_corridor_from_center +
-// compute_red_xs_from_purple (when ego anchor is unavailable).
+
 // ===========================================================================
 
 namespace {
@@ -847,9 +807,6 @@ RenderCorridor build_render_corridor(const BoundaryTrackResult& track,
     return out;
 }
 
-// ===========================================================================
-// Fixed-guidance fallback (features/lane_corridor.py::fixed_guidance_template)
-// ===========================================================================
 
 namespace {
 

@@ -1,31 +1,4 @@
 #pragma once
-
-// Phase-2/3 port of the Python lane finalization → render-corridor pipeline.
-// Mirrors, in order:
-//   src/features/red_center_geom.py
-//   src/features/red_center_from_boundaries.py
-//   src/features/lane_target_resolver.py
-//   src/features/ego_anchored_path.py
-//   src/features/lane_corridor_render_curve.py
-//   src/features/lane_corridor_render_purple.py
-//   src/features/lane_corridor_render_yellow.py
-//   src/features/lane_corridor_render.py
-//
-// The C++ port is faithful to the Python algorithms and constants. The
-// SOURCE_DETECTED-only purple-primary gating, the per-source ego-anchor
-// clamps (LANE_AREA_ONLY vs purple), the curvature damp/EMA/deadband,
-// and the yellow corridor's normal-offset formula are all reproduced.
-//
-// Pieces deliberately approximated (documented gaps; see report):
-//   - dynamic_corridor lane_area fit is a weighted row-centroid quadratic
-//     in C++ rather than the full Python weighting / smoothing pipeline
-//   - resolve_purple_xs uses the same swap+min-width invariant as Python
-//     but does not consult max_lane_width_frac_w (Python keeps that arg
-//     for back-compat; it isn't load-bearing today either)
-//   - per-frame timing-stage instrumentation is not added inside the
-//     render corridor; the runtime wraps it in a single
-//     "lane_geometry_parity" stage timer.
-
 #include <limits>
 
 #include <opencv2/core.hpp>
@@ -35,9 +8,6 @@
 
 namespace adas {
 
-// ----------------------------------------------------------------------------
-// Red center result (analogue of red_center_from_boundaries.compute_red_centerline)
-// ----------------------------------------------------------------------------
 
 enum class CenterSource {
     Lost,
@@ -174,15 +144,6 @@ RedCenter compute_red_centerline(const cv::Mat& lane_area,
                                  const BoundaryTrackResult& track,
                                  int frame_h, int frame_w);
 
-// Camera-anchored straight guidance fallback. Mirrors Python
-// features/lane_corridor.py::fixed_guidance_template + the way
-// pipeline/postprocessor.py::draw_fixed_guidance renders it: a vertical
-// red centerline at frame_w*0.5 sampled on the same 24-pt ROI grid the
-// render-corridor uses, plus a symmetric perspective trapezoid for the
-// yellow corridor (half-width interpolated 0.040→0.250 frame_w, min 12 px).
-// purple_left/right_pts_img stay empty by design. Returned geometry has
-// valid=true so the overlay still draws guidance, but confidence=0 so
-// behavior consumers can treat it as "no real lane evidence".
 LaneGeometry make_fixed_guidance_geometry(int frame_h, int frame_w);
 
 }  // namespace adas

@@ -1,10 +1,5 @@
 #pragma once
 
-// Common typed payloads passed between threaded stages (capture / lane /
-// object / fusion / render). Mirrors src/pipeline/packets.py at the
-// C++ level; field names match where practical so cross-language parity
-// reviews are easy.
-
 #include <chrono>
 #include <cstdint>
 #include <optional>
@@ -81,18 +76,6 @@ struct Detection {
     cv::Rect2f bbox_img;      // source-frame px
     float score{0.0f};
     int track_id{-1};
-
-    // Monocular distance estimate — mirrors the fields populated by
-    // src/features/object_localizer_pose.py::estimate_road_object_pose.
-    // pose_valid means an estimate ran successfully; distance_display_valid
-    // gates HUD/label rendering.
-    //   z_m       : raw camera-relative forward distance (diagnostic)
-    //   distance_m: raw camera-relative slant range hypot(x_m, z_m)
-    //   display_distance_m: bumper-relative slant range that the operator
-    //     UI consumes. This subtracts the camera→front-bumper mount
-    //     offset (DistanceCameraConfig::camera_to_front_bumper_m) from
-    //     the forward component only; lateral offset (x_m) and bearing
-    //     are unchanged. Clamped to >= 0.
     bool  pose_valid{false};
     bool  distance_display_valid{false};
     float distance_m{-1.0f};
@@ -101,34 +84,12 @@ struct Detection {
     float x_m{0.0f};
     float bearing_deg{0.0f};
     float distance_confidence{0.0f};
-
-    // Relative speed of the FUSED front-object only (display/log only —
-    // never feeds motor/RC). Populated by FrontSpeedEstimator after two
-    // in-corridor distance samples with a sane dt. Sign convention:
-    //   relative_speed_*  = d(distance)/dt  — positive when the front
-    //                       vehicle is moving away from ego
-    //   closing_speed_kmh = -relative_speed_kmh — positive when closing
-    // relative_speed_valid is left false on every other detection, even
-    // when that detection's bbox matches the front_object copy: only the
-    // optional<Detection> front_object carries the estimate.
     bool  relative_speed_valid{false};
     float relative_speed_mps{0.0f};
     float relative_speed_kmh{0.0f};
     float closing_speed_kmh{0.0f};
-    // Estimated absolute speed of the fused front vehicle. Valid only when
-    // the ego speed source (GPS) is valid:
-    //   front_speed_kmh = ego_speed_kmh + relative_speed_kmh
-    // Display/log only; never feeds motor/RC.
     bool  front_speed_valid{false};
     float front_speed_kmh{0.0f};
-
-    // Time gap for the fused front object (seconds), derived by
-    // FrontSpeedEstimator as distance / signed_relative_rate in BOTH
-    // directions. SIGNED: ttc_s > 0 = closing (seconds to collision);
-    // ttc_s < 0 = opening (gap growing, no collision). Left invalid only when
-    // the |rate| is below the noise floor (kTtcMinClosingMps, ~stationary) or
-    // distance is unavailable. Display / log / HUD only — NEVER feeds motor/RC
-    // (the motor is distance-only; see FollowController).
     bool  ttc_valid{false};
     float ttc_s{0.0f};
 };

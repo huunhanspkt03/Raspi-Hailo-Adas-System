@@ -1,12 +1,5 @@
 #pragma once
 
-// Lightweight per-stage timing helper, C++ analogue of
-// src/utils/stage_timer.py. Disabled by default so leaving instrumentation
-// in the hot path costs ~one atomic load when not profiling.
-//
-// Tracks EMA, max, and sample count per stage. Thread-safe via mutex —
-// stages are recorded from capture/lane/render worker threads.
-
 #include <algorithm>
 #include <chrono>
 #include <cstdint>
